@@ -256,7 +256,6 @@
         // 2. 處理單一網址
         async function processQueueItem(index) {
             if (index >= state.queue.length) return;
-            
             const item = state.queue[index];
             if (item.status !== 'pending') return;
 
@@ -265,19 +264,26 @@
             log(`正在分析: ${shortUrl(item.url)}`);
 
             try {
-                // 透過代理抓取 HTML
-                const htmlContent = await fetchViaProxy(item.url);
-                if (!htmlContent) throw new Error('無法讀取內容，可能是防火牆或代理限制');
+                // 判斷是否為 CSS 檔案
+                if (item.url.endsWith('.css')) {
+                    const cssContent = await fetchViaProxy(item.url);
+                    if (!cssContent) throw new Error('無法讀取 CSS 內容');
+                    parseCss(cssContent, item.url, 'External CSS');
+                } else {
+                    // 透過代理抓取 HTML
+                    const htmlContent = await fetchViaProxy(item.url);
+                    if (!htmlContent) throw new Error('無法讀取內容，可能是防火牆或代理限制');
 
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(htmlContent, 'text/html');
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(htmlContent, 'text/html');
 
-                // A. 解析字體
-                await scanPageForFonts(doc, item.url);
+                    // A. 解析字體
+                    await scanPageForFonts(doc, item.url);
 
-                // B. 首頁自動發現同目錄頁面
-                if (index === 0) {
-                    extractInternalLinks(doc, item.url);
+                    // B. 首頁自動發現同目錄頁面
+                    if (index === 0) {
+                        extractInternalLinks(doc, item.url);
+                    }
                 }
 
                 item.status = 'done';
