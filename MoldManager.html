@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>模具管理系統 PRO</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+        body { font-family: "Microsoft JhengHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        /* Custom Scrollbar for cleaner look */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- Icons Components (Replacing Lucide-React for standalone HTML) ---
+        const IconWrapper = ({ children, size = 24, className = "" }) => (
+            <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                width={size} 
+                height={size} 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                className={className}
+            >
+                {children}
+            </svg>
+        );
+
+        const Box = (props) => <IconWrapper {...props}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></IconWrapper>;
+        const Wrench = (props) => <IconWrapper {...props}><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></IconWrapper>;
+        const ClipboardList = (props) => <IconWrapper {...props}><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></IconWrapper>;
+        const LogOut = (props) => <IconWrapper {...props}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></IconWrapper>;
+        const LogIn = (props) => <IconWrapper {...props}><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" x2="3" y1="12" y2="12"/></IconWrapper>;
+        const Plus = (props) => <IconWrapper {...props}><path d="M5 12h14"/><path d="M12 5v14"/></IconWrapper>;
+        const Search = (props) => <IconWrapper {...props}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></IconWrapper>;
+        const Trash2 = (props) => <IconWrapper {...props}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></IconWrapper>;
+        const Save = (props) => <IconWrapper {...props}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></IconWrapper>;
+        const X = (props) => <IconWrapper {...props}><path d="M18 6 6 18"/><path d="m6 6 18 18"/></IconWrapper>;
+        const History = (props) => <IconWrapper {...props}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12"/></IconWrapper>;
+        const Calendar = (props) => <IconWrapper {...props}><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></IconWrapper>;
+        const Layers = (props) => <IconWrapper {...props}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></IconWrapper>;
+
+        // --- Mock Data / Initial State ---
+        const INITIAL_MOLDS = [
+            { 
+                id: 'M-2023-001-A', 
+                model: 'M-2023-001',
+                name: '手機殼前蓋模具', 
+                location: 'A-01-02', 
+                status: 'available', 
+                mfgDate: '2022-01-01',
+                lifespanYears: 3,
+                lastMaintenance: '2023-10-01',
+                currentShots: 15000 
+            },
+            { 
+                id: 'M-2023-001-B', 
+                model: 'M-2023-001',
+                name: '手機殼前蓋模具', 
+                location: 'A-01-03', 
+                status: 'in-use', 
+                mfgDate: '2022-06-01',
+                lifespanYears: 3,
+                lastMaintenance: '2023-11-15', 
+                operator: '陳小明', 
+                machine: 'IMM-05',
+                currentShots: 85000
+            },
+            { 
+                id: 'M-2024-003-A', 
+                model: 'M-2024-003',
+                name: '汽車按鍵面板', 
+                location: 'A-02-01', 
+                status: 'maintenance', 
+                mfgDate: '2020-05-20',
+                lifespanYears: 5,
+                lastMaintenance: '2023-09-20',
+                currentShots: 100500 
+            },
+        ];
+
+        const INITIAL_LOGS = [
+            { id: 1, moldId: 'M-2023-001-A', action: 'create', note: '新模具入庫', timestamp: '2022-01-01 09:00' },
+            { id: 2, moldId: 'M-2023-001-B', action: 'checkout', operator: '陳小明', machine: 'IMM-05', timestamp: '2023-11-20 08:30' },
+        ];
+
+        // --- Components ---
+
+        const StatusBadge = ({ status }) => {
+            const styles = {
+                available: 'bg-green-100 text-green-800 border-green-200',
+                'in-use': 'bg-blue-100 text-blue-800 border-blue-200',
+                maintenance: 'bg-orange-100 text-orange-800 border-orange-200',
+                scrapped: 'bg-gray-100 text-gray-800 border-gray-200',
+            };
+
+            const labels = {
+                available: '在庫可用',
+                'in-use': '生產中',
+                maintenance: '保養中',
+                scrapped: '已報廢',
+            };
+
+            return (
+                <span className={`px-2 py-1 text-xs font-semibold rounded-full border ${styles[status] || styles.scrapped}`}>
+                {labels[status]}
+                </span>
+            );
+        };
+
+        const Modal = ({ isOpen, onClose, title, children }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto">
+                        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 sticky top-0">
+                        <h3 className="text-lg font-bold text-gray-800">{title}</h3>
+                        <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                            <X size={20} />
+                        </button>
+                        </div>
+                        <div className="p-6">
+                        {children}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 計算年限 Helper
+        const calculateAge = (mfgDate, lifespanYears) => {
+            const start = new Date(mfgDate);
+            const now = new Date();
+            const diffTime = Math.abs(now - start);
+            const diffYears = diffTime / (1000 * 60 * 60 * 24 * 365.25); 
+            
+            const percentage = Math.min((diffYears / lifespanYears) * 100, 100);
+            
+            return {
+                age: diffYears.toFixed(1),
+                percentage,
+                isExpired: diffYears >= lifespanYears
+            };
+        };
+
+        function App() {
+            // --- State ---
+            const [activeTab, setActiveTab] = useState('dashboard');
+            const [molds, setMolds] = useState(() => {
+                const saved = localStorage.getItem('mold_data_v2');
+                return saved ? JSON.parse(saved) : INITIAL_MOLDS;
+            });
+            const [logs, setLogs] = useState(() => {
+                const saved = localStorage.getItem('mold_logs_v2');
+                return saved ? JSON.parse(saved) : INITIAL_LOGS;
+            });
+            const [searchTerm, setSearchTerm] = useState('');
+
+            // Modals State
+            const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+            const [isActionModalOpen, setIsActionModalOpen] = useState(false);
+            const [currentAction, setCurrentAction] = useState(null); 
+            const [selectedMold, setSelectedMold] = useState(null);
+            
+            // Form Data
+            const [formData, setFormData] = useState({});
+
+            // --- Effects ---
+            useEffect(() => {
+                localStorage.setItem('mold_data_v2', JSON.stringify(molds));
+                localStorage.setItem('mold_logs_v2', JSON.stringify(logs));
+            }, [molds, logs]);
+
+            // --- Helpers ---
+            const getTimestamp = () => new Date().toLocaleString('zh-TW', { hour12: false });
+
+            const addLog = (moldId, action, details) => {
+                const newLog = {
+                id: Date.now(),
+                moldId,
+                action,
+                timestamp: getTimestamp(),
+                ...details
+                };
+                setLogs(prev => [newLog, ...prev]);
+            };
+
+            // --- Handlers ---
+
+            const handleAddMold = (e) => {
+                e.preventDefault();
+                const uniqueId = `${formData.model}-${formData.assetSuffix}`;
+                
+                if (molds.some(m => m.id === uniqueId)) {
+                alert('錯誤：此模具資產編號已存在！');
+                return;
+                }
+
+                const newMold = {
+                id: uniqueId,
+                model: formData.model,
+                name: formData.name,
+                location: formData.location,
+                status: 'available',
+                mfgDate: formData.mfgDate,
+                lifespanYears: parseFloat(formData.lifespanYears) || 3,
+                currentShots: 0,
+                lastMaintenance: '無',
+                };
+                setMolds([...molds, newMold]);
+                addLog(newMold.id, 'create', { note: '建立新模具資料' });
+                setIsAddModalOpen(false);
+                setFormData({});
+            };
+
+            const openActionModal = (mold, action) => {
+                setSelectedMold(mold);
+                setCurrentAction(action);
+                setFormData({});
+                setIsActionModalOpen(true);
+            };
+
+            const handleActionSubmit = (e) => {
+                e.preventDefault();
+                let updatedMolds = [...molds];
+                const targetIndex = updatedMolds.findIndex(m => m.id === selectedMold.id);
+                
+                if (targetIndex === -1) return;
+
+                if (currentAction === 'checkout') {
+                updatedMolds[targetIndex] = {
+                    ...updatedMolds[targetIndex],
+                    status: 'in-use',
+                    operator: formData.operator,
+                    machine: formData.machine
+                };
+                addLog(selectedMold.id, 'checkout', { operator: formData.operator, machine: formData.machine });
+                } else if (currentAction === 'return') {
+                const shotsAdded = parseInt(formData.shotsAdded) || 0;
+                const newTotal = updatedMolds[targetIndex].currentShots + shotsAdded;
+                
+                let nextStatus = 'available';
+
+                updatedMolds[targetIndex] = {
+                    ...updatedMolds[targetIndex],
+                    status: nextStatus,
+                    currentShots: newTotal,
+                    operator: null,
+                    machine: null
+                };
+                addLog(selectedMold.id, 'return', { shotsAdded, note: '歸還入庫' });
+                } else if (currentAction === 'maintain') {
+                updatedMolds[targetIndex] = {
+                    ...updatedMolds[targetIndex],
+                    status: 'available',
+                    lastMaintenance: new Date().toISOString().split('T')[0]
+                };
+                addLog(selectedMold.id, 'maintenance', { note: '完成保養，重新入庫' });
+                }
+
+                setMolds(updatedMolds);
+                setIsActionModalOpen(false);
+                setFormData({});
+            };
+
+            const handleDelete = (id) => {
+                if (confirm('確定要刪除此模具資料嗎？')) {
+                setMolds(molds.filter(m => m.id !== id));
+                addLog(id, 'delete', { note: '刪除模具' });
+                }
+            };
+
+            // --- Render Sections ---
+
+            const filteredMolds = molds.filter(m => 
+                m.name.includes(searchTerm) || m.id.includes(searchTerm) || m.location.includes(searchTerm) || m.model.includes(searchTerm)
+            );
+
+            const getModelSummary = () => {
+                const summary = {};
+                molds.forEach(mold => {
+                if (!summary[mold.model]) {
+                    summary[mold.model] = { name: mold.name, total: 0, available: 0, inUse: 0, maintenance: 0 };
+                }
+                summary[mold.model].total += 1;
+                if (mold.status === 'available') summary[mold.model].available += 1;
+                if (mold.status === 'in-use') summary[mold.model].inUse += 1;
+                if (mold.status === 'maintenance') summary[mold.model].maintenance += 1;
+                });
+                return Object.entries(summary);
+            };
+
+            const renderDashboard = () => {
+                const stats = {
+                total: molds.length,
+                inUse: molds.filter(m => m.status === 'in-use').length,
+                maintenance: molds.filter(m => m.status === 'maintenance').length,
+                available: molds.filter(m => m.status === 'available').length,
+                };
+
+                return (
+                <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="bg-white p-6 rounded-lg shadow-sm border-l-4 border-blue-500 flex justify-between items-center">
+                        <div>
+                        <p className="text-gray-500 text-sm font-medium">資產總數</p>
+                        <h2 className="text-3xl font-bold text-gray-800">{stats.total}</h2>
+                        </div>
+                        <Box className="text-blue-200" size={32} />
+                    </div>
+                    <div className="bg-white p-6 rounded-lg shadow-sm border-l-4 border-green-500 flex justify-between items-center">
+                        <div>
+                        <p className="text-gray-500 text-sm font-medium">在庫可用</p>
+                        <h2 className="text-3xl font-bold text-gray-800">{stats.available}</h2>
+                        </div>
+                        <ClipboardList className="text-green-200" size={32} />
+                    </div>
+                    <div className="bg-white p-6 rounded-lg shadow-sm border-l-4 border-indigo-500 flex justify-between items-center">
+                        <div>
+                        <p className="text-gray-500 text-sm font-medium">生產使用中</p>
+                        <h2 className="text-3xl font-bold text-gray-800">{stats.inUse}</h2>
+                        </div>
+                        <LogOut className="text-indigo-200" size={32} />
+                    </div>
+                    <div className="bg-white p-6 rounded-lg shadow-sm border-l-4 border-orange-500 flex justify-between items-center">
+                        <div>
+                        <p className="text-gray-500 text-sm font-medium">保養/維修中</p>
+                        <h2 className="text-3xl font-bold text-gray-800">{stats.maintenance}</h2>
+                        </div>
+                        <Wrench className="text-orange-200" size={32} />
+                    </div>
+                    </div>
+
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="p-4 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
+                        <Layers size={18} className="text-blue-600" />
+                        <h3 className="font-bold text-gray-700">型號庫存彙總 (Model Inventory)</h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm text-gray-600">
+                        <thead className="bg-gray-50 text-gray-700 font-semibold">
+                            <tr>
+                            <th className="px-6 py-3">模具型號</th>
+                            <th className="px-6 py-3">模具名稱</th>
+                            <th className="px-6 py-3 text-center bg-gray-100">總數量</th>
+                            <th className="px-6 py-3 text-center text-green-700 bg-green-50">在庫可用</th>
+                            <th className="px-6 py-3 text-center text-blue-700 bg-blue-50">生產中</th>
+                            <th className="px-6 py-3 text-center text-orange-700 bg-orange-50">維修中</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {getModelSummary().map(([model, data]) => (
+                            <tr key={model} className="hover:bg-gray-50">
+                                <td className="px-6 py-3 font-medium text-gray-900">{model}</td>
+                                <td className="px-6 py-3">{data.name}</td>
+                                <td className="px-6 py-3 text-center font-bold">{data.total}</td>
+                                <td className="px-6 py-3 text-center font-bold text-green-600">{data.available}</td>
+                                <td className="px-6 py-3 text-center font-bold text-blue-600">{data.inUse}</td>
+                                <td className="px-6 py-3 text-center font-bold text-orange-600">{data.maintenance}</td>
+                            </tr>
+                            ))}
+                        </tbody>
+                        </table>
+                    </div>
+                    </div>
+                </div>
+                );
+            };
+
+            const renderMoldList = () => (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div className="relative w-full md:w-64">
+                    <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
+                    <input
+                        type="text"
+                        placeholder="搜尋型號、編號、名稱..."
+                        className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                    </div>
+                    <button 
+                    onClick={() => setIsAddModalOpen(true)}
+                    className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition w-full md:w-auto justify-center"
+                    >
+                    <Plus size={18} /> 新增模具
+                    </button>
+                </div>
+                
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm text-gray-600">
+                    <thead className="bg-gray-50 text-gray-800 font-semibold uppercase tracking-wider">
+                        <tr>
+                        <th className="px-6 py-4">資產編號 (ID)</th>
+                        <th className="px-6 py-4">型號 / 名稱</th>
+                        <th className="px-6 py-4">狀態</th>
+                        <th className="px-6 py-4">位置</th>
+                        <th className="px-6 py-4">壽命管理 (年限)</th>
+                        <th className="px-6 py-4 text-right">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                        {filteredMolds.length === 0 ? (
+                        <tr>
+                            <td colSpan="6" className="px-6 py-8 text-center text-gray-400">
+                            沒有找到符合的模具資料
+                            </td>
+                        </tr>
+                        ) : (
+                        filteredMolds.map(mold => {
+                            const { age, percentage, isExpired } = calculateAge(mold.mfgDate, mold.lifespanYears);
+                            
+                            return (
+                            <tr key={mold.id} className="hover:bg-gray-50 transition">
+                                <td className="px-6 py-4 font-medium text-gray-900">{mold.id}</td>
+                                <td className="px-6 py-4">
+                                <div className="text-xs text-gray-500">{mold.model}</div>
+                                <div className="font-medium">{mold.name}</div>
+                                {mold.operator && <div className="text-xs text-blue-600 mt-1">操作員: {mold.operator}</div>}
+                                </td>
+                                <td className="px-6 py-4">
+                                <StatusBadge status={mold.status} />
+                                </td>
+                                <td className="px-6 py-4">
+                                {mold.status === 'in-use' ? (
+                                    <span className="flex items-center gap-1 text-blue-600 font-medium">
+                                    {mold.machine}
+                                    </span>
+                                ) : (
+                                    mold.location
+                                )}
+                                </td>
+                                <td className="px-6 py-4 w-56">
+                                <div className="flex justify-between text-xs mb-1">
+                                    <span className="flex items-center gap-1">
+                                    <Calendar size={12} />
+                                    {age} 年
+                                    </span>
+                                    <span className="text-gray-400">/ 上限 {mold.lifespanYears} 年</span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-2.5 relative overflow-hidden">
+                                    <div 
+                                    className={`h-full rounded-full ${isExpired ? 'bg-red-500' : percentage > 80 ? 'bg-orange-400' : 'bg-green-500'}`}
+                                    style={{ width: `${percentage}%` }}
+                                    ></div>
+                                </div>
+                                <div className="text-[10px] text-gray-400 mt-1">
+                                    製造日期: {mold.mfgDate} ({mold.currentShots.toLocaleString()} 模次)
+                                </div>
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                <div className="flex justify-end gap-2">
+                                    {mold.status === 'available' && (
+                                    <button 
+                                        onClick={() => openActionModal(mold, 'checkout')}
+                                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded border border-blue-200 flex items-center gap-1 text-xs"
+                                        title="領用"
+                                    >
+                                        <LogOut size={14} /> 領用
+                                    </button>
+                                    )}
+                                    {mold.status === 'in-use' && (
+                                    <button 
+                                        onClick={() => openActionModal(mold, 'return')}
+                                        className="p-1.5 text-green-600 hover:bg-green-50 rounded border border-green-200 flex items-center gap-1 text-xs"
+                                        title="歸還"
+                                    >
+                                        <LogIn size={14} /> 歸還
+                                    </button>
+                                    )}
+                                    {mold.status === 'maintenance' && (
+                                    <button 
+                                        onClick={() => openActionModal(mold, 'maintain')}
+                                        className="p-1.5 text-orange-600 hover:bg-orange-50 rounded border border-orange-200 flex items-center gap-1 text-xs"
+                                        title="完成保養"
+                                    >
+                                        <Wrench size={14} /> 完修
+                                    </button>
+                                    )}
+                                    <button 
+                                        onClick={() => handleDelete(mold.id)}
+                                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition"
+                                        title="刪除"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                </div>
+                                </td>
+                            </tr>
+                            );
+                        })
+                        )}
+                    </tbody>
+                    </table>
+                </div>
+                </div>
+            );
+
+            const renderLogs = () => (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div className="p-4 border-b border-gray-100 bg-gray-50">
+                    <h3 className="font-semibold text-gray-700 flex items-center gap-2">
+                    <History size={18} /> 系統操作紀錄
+                    </h3>
+                </div>
+                <ul className="divide-y divide-gray-100">
+                    {logs.map(log => {
+                    const actionLabels = {
+                        create: { text: '建立資料', color: 'text-green-600', bg: 'bg-green-100' },
+                        checkout: { text: '領用出庫', color: 'text-blue-600', bg: 'bg-blue-100' },
+                        return: { text: '歸還入庫', color: 'text-indigo-600', bg: 'bg-indigo-100' },
+                        maintenance: { text: '保養維修', color: 'text-orange-600', bg: 'bg-orange-100' },
+                        delete: { text: '刪除資料', color: 'text-red-600', bg: 'bg-red-100' },
+                    };
+                    const style = actionLabels[log.action] || actionLabels.create;
+
+                    return (
+                        <li key={log.id} className="p-4 hover:bg-gray-50">
+                        <div className="flex items-start justify-between">
+                            <div className="flex gap-3">
+                            <span className={`px-2 py-1 rounded text-xs font-bold h-fit ${style.bg} ${style.color}`}>
+                                {style.text}
+                            </span>
+                            <div>
+                                <p className="font-medium text-gray-800">{log.moldId}</p>
+                                <p className="text-sm text-gray-500">
+                                {log.action === 'checkout' && `領用人: ${log.operator} / 機台: ${log.machine}`}
+                                {log.action === 'return' && `本次生產: ${log.shotsAdded} 模 / ${log.note}`}
+                                {log.action === 'maintenance' && log.note}
+                                {log.action === 'create' && log.note}
+                                </p>
+                            </div>
+                            </div>
+                            <span className="text-xs text-gray-400 whitespace-nowrap">{log.timestamp}</span>
+                        </div>
+                        </li>
+                    );
+                    })}
+                </ul>
+                </div>
+            );
+
+            return (
+                <div className="min-h-screen bg-gray-100 text-gray-800 font-sans">
+                {/* Navbar */}
+                <nav className="bg-slate-800 text-white shadow-lg sticky top-0 z-40">
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="flex items-center justify-between h-16">
+                        <div className="flex items-center gap-2">
+                        <div className="bg-blue-500 p-1.5 rounded text-white">
+                            <Box size={20} />
+                        </div>
+                        <span className="font-bold text-lg tracking-wide">模具管理系統 PRO</span>
+                        </div>
+                        <div className="flex space-x-1">
+                        <button 
+                            onClick={() => setActiveTab('dashboard')}
+                            className={`px-3 py-2 rounded-md text-sm font-medium transition ${activeTab === 'dashboard' ? 'bg-slate-700 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-700'}`}
+                        >
+                            總覽
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('list')}
+                            className={`px-3 py-2 rounded-md text-sm font-medium transition ${activeTab === 'list' ? 'bg-slate-700 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-700'}`}
+                        >
+                            模具列表
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('logs')}
+                            className={`px-3 py-2 rounded-md text-sm font-medium transition ${activeTab === 'logs' ? 'bg-slate-700 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-700'}`}
+                        >
+                            歷程記錄
+                        </button>
+                        </div>
+                    </div>
+                    </div>
+                </nav>
+
+                {/* Main Content */}
+                <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                    {activeTab === 'dashboard' && (
+                    <div className="animate-in fade-in duration-500">
+                        {renderDashboard()}
+                        {renderMoldList()}
+                    </div>
+                    )}
+                    {activeTab === 'list' && (
+                    <div className="animate-in fade-in duration-500">
+                        {renderMoldList()}
+                    </div>
+                    )}
+                    {activeTab === 'logs' && (
+                    <div className="animate-in fade-in duration-500">
+                        {renderLogs()}
+                    </div>
+                    )}
+                </main>
+
+                {/* Create Modal */}
+                <Modal 
+                    isOpen={isAddModalOpen} 
+                    onClose={() => setIsAddModalOpen(false)} 
+                    title="新增模具資料"
+                >
+                    <form onSubmit={handleAddMold} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">模具型號 (Model)</label>
+                        <input required type="text" className="w-full border rounded-md p-2 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="例如: M-2023-001" 
+                            value={formData.model || ''} onChange={e => setFormData({...formData, model: e.target.value})} />
+                        </div>
+                        <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">資產編號後綴</label>
+                        <input required type="text" className="w-full border rounded-md p-2 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="例如: A01, B" 
+                            value={formData.assetSuffix || ''} onChange={e => setFormData({...formData, assetSuffix: e.target.value})} />
+                        <p className="text-xs text-gray-400 mt-1">完整編號: {formData.model ? `${formData.model}-${formData.assetSuffix || '?'}` : '...'}</p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">模具名稱</label>
+                        <input required type="text" className="w-full border rounded-md p-2 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="產品名稱"
+                        value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">儲位</label>
+                        <input required type="text" className="w-full border rounded-md p-2 outline-none" placeholder="A-01"
+                            value={formData.location || ''} onChange={e => setFormData({...formData, location: e.target.value})} />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">製造日期</label>
+                        <input required type="date" className="w-full border rounded-md p-2 outline-none"
+                            value={formData.mfgDate || ''} onChange={e => setFormData({...formData, mfgDate: e.target.value})} />
+                        </div>
+                        <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">預估壽命 (年)</label>
+                        <input required type="number" step="0.5" className="w-full border rounded-md p-2 outline-none" defaultValue={3}
+                            value={formData.lifespanYears || ''} onChange={e => setFormData({...formData, lifespanYears: e.target.value})} />
+                        </div>
+                    </div>
+
+                    <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 font-medium flex justify-center items-center gap-2 mt-4">
+                        <Save size={18} /> 儲存資料
+                    </button>
+                    </form>
+                </Modal>
+
+                {/* Action Modal (Checkout/Return) */}
+                <Modal 
+                    isOpen={isActionModalOpen} 
+                    onClose={() => setIsActionModalOpen(false)} 
+                    title={currentAction === 'checkout' ? '領用模具' : currentAction === 'return' ? '歸還模具' : '完成保養'}
+                >
+                    <form onSubmit={handleActionSubmit} className="space-y-4">
+                    <div className="bg-gray-50 p-3 rounded text-sm text-gray-600 mb-4">
+                        模具: <span className="font-bold text-gray-800">{selectedMold?.name}</span> <br/>
+                        ID: {selectedMold?.id}
+                    </div>
+
+                    {currentAction === 'checkout' && (
+                        <>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">領用人員</label>
+                            <input required type="text" className="w-full border rounded-md p-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                            value={formData.operator || ''} onChange={e => setFormData({...formData, operator: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">機台編號</label>
+                            <input required type="text" className="w-full border rounded-md p-2 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="例如: IMM-01"
+                            value={formData.machine || ''} onChange={e => setFormData({...formData, machine: e.target.value})} />
+                        </div>
+                        <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 mt-4">確認領用</button>
+                        </>
+                    )}
+
+                    {currentAction === 'return' && (
+                        <>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">本次生產模數 (Shots)</label>
+                            <input required type="number" min="0" className="w-full border rounded-md p-2 focus:ring-2 focus:ring-green-500 outline-none"
+                            value={formData.shotsAdded || ''} onChange={e => setFormData({...formData, shotsAdded: e.target.value})} />
+                            <p className="text-xs text-gray-500 mt-1">紀錄生產次數 (輔助參考)</p>
+                        </div>
+                        <button type="submit" className="w-full bg-green-600 text-white py-2 rounded-md hover:bg-green-700 mt-4">確認歸還</button>
+                        </>
+                    )}
+
+                    {currentAction === 'maintain' && (
+                        <>
+                        <div className="text-center py-4">
+                            <Wrench className="mx-auto text-orange-500 mb-2" size={48} />
+                            <p className="text-gray-700">確認已完成所有保養項目？</p>
+                            <p className="text-sm text-gray-500">確認後模具狀態將變更為「在庫可用」。</p>
+                        </div>
+                        <button type="submit" className="w-full bg-orange-600 text-white py-2 rounded-md hover:bg-orange-700 mt-4">確認完成保養</button>
+                        </>
+                    )}
+                    </form>
+                </Modal>
+
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
