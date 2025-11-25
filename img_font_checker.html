@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FontGuard 字體授權衛士</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts Loader -->
+    <link id="dynamic-fonts" rel="stylesheet" href="">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
+        
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+        }
+
+        /* 自定義捲軸 */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.1);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2);
+            border-radius: 4px;
+        }
+
+        .font-item.active {
+            background-color: rgba(16, 185, 129, 0.2);
+            border-color: #10B981;
+            color: #D1FAE5;
+        }
+        
+        /* 防止選取圖片 */
+        .no-select {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 h-screen flex flex-col overflow-hidden">
+
+    <!-- 頂部導航列 -->
+    <header class="h-16 bg-slate-800 border-b border-slate-700 flex items-center px-6 justify-between shadow-md z-10 shrink-0">
+        <div class="flex items-center gap-2">
+            <div class="bg-emerald-500 p-2 rounded-lg">
+                <i data-lucide="type" class="w-5 h-5 text-white"></i>
+            </div>
+            <h1 class="text-xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+                FontGuard 字體授權衛士
+            </h1>
+        </div>
+        <div class="flex items-center gap-4 text-sm text-slate-400">
+            <span class="flex items-center gap-1">
+                <i data-lucide="check-circle" class="w-4 h-4 text-emerald-500"></i> 
+                已授權字體比對系統
+            </span>
+        </div>
+    </header>
+
+    <main class="flex flex-1 overflow-hidden">
+        
+        <!-- 左側：工作區 -->
+        <div class="flex-1 flex flex-col relative bg-slate-950/50 p-4 overflow-hidden">
+            
+            <!-- 工具列 -->
+            <div class="absolute top-6 left-6 z-20 flex gap-2">
+                <label class="cursor-pointer bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg shadow-lg border border-slate-700 flex items-center gap-2 transition-all">
+                    <i data-lucide="upload" class="w-4 h-4"></i>
+                    上傳圖片
+                    <input type="file" id="imageInput" class="hidden" accept="image/*">
+                </label>
+                <button id="clearBtn" class="hidden bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/50 px-4 py-2 rounded-lg transition-all">
+                    清除
+                </button>
+            </div>
+
+            <!-- 圖片顯示與操作區域 -->
+            <div id="canvasArea" class="flex-1 rounded-xl border-2 border-dashed border-slate-700 bg-slate-900 flex items-center justify-center overflow-hidden relative no-select">
+                
+                <!-- 預設提示 -->
+                <div id="placeholder" class="text-center p-8 text-slate-500">
+                    <div class="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i data-lucide="image" class="w-8 h-8 opacity-50"></i>
+                    </div>
+                    <p class="text-lg font-medium">拖放圖片或點擊左上角上傳</p>
+                    <p class="text-sm mt-2 opacity-60">支援 JPG, PNG, WebP 格式</p>
+                </div>
+
+                <!-- 圖片元素 -->
+                <img id="uploadedImage" src="" alt="Upload" class="hidden max-w-full max-h-full object-contain pointer-events-none">
+                
+                <!-- 疊加文字 (可拖曳) -->
+                <div id="overlayText" 
+                     class="hidden absolute z-30 hover:outline hover:outline-2 hover:outline-emerald-500/50 rounded p-1 whitespace-nowrap cursor-grab select-none"
+                     style="left: 50%; top: 50%; color: #ff0000; font-size: 48px; transform: translate(-50%, -50%); text-shadow: 0px 0px 2px rgba(255,255,255,0.2);">
+                    輸入文字以比對
+                </div>
+
+                <!-- 底部提示 -->
+                <div id="hintBubble" class="hidden absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur px-4 py-2 rounded-full text-xs text-slate-300 pointer-events-none">
+                    拖曳紅色文字疊加在圖片文字上，調整字體與大小進行比對
+                </div>
+            </div>
+        </div>
+
+        <!-- 右側：控制面板 -->
+        <div class="w-80 bg-slate-800 border-l border-slate-700 flex flex-col overflow-hidden shrink-0">
+            
+            <div class="p-4 border-b border-slate-700 bg-slate-800/50">
+                <h2 class="font-semibold text-slate-200 flex items-center gap-2">
+                    <i data-lucide="settings" class="w-4 h-4"></i> 比對控制台
+                </h2>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
+                
+                <!-- 1. 比對文字設定 -->
+                <div class="space-y-3">
+                    <label class="text-xs font-bold text-slate-400 uppercase tracking-wider">1. 輸入比對內容</label>
+                    <input type="text" id="textInput" value="輸入文字以比對" class="w-full bg-slate-900 border border-slate-600 rounded-md p-2 text-white focus:ring-2 focus:ring-emerald-500 outline-none placeholder-slate-500">
+                    
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-xs text-slate-500 mb-1 block">大小 (px)</label>
+                            <input type="number" id="sizeInput" value="48" class="w-full bg-slate-900 border border-slate-600 rounded p-1.5 text-sm text-white">
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-500 mb-1 block">透明度</label>
+                            <input type="range" id="opacityInput" min="0.1" max="1" step="0.1" value="0.8" class="w-full h-8 accent-emerald-500">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-500 mb-1 block">比對顏色</label>
+                        <div class="flex gap-2" id="colorPalette">
+                            <!-- 顏色按鈕由 JS 生成 -->
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="border-slate-700">
+
+                <!-- 2. 選擇授權字體 -->
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center">
+                        <label class="text-xs font-bold text-slate-400 uppercase tracking-wider">2. 選擇授權字體</label>
+                        <span id="currentFontSource" class="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full">System</span>
+                    </div>
+                    
+                    <div id="fontList" class="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                        <!-- 字體列表由 JS 生成 -->
+                    </div>
+                </div>
+
+                <hr class="border-slate-700">
+
+                <!-- 3. 管理授權庫 -->
+                <div class="space-y-3">
+                    <label class="text-xs font-bold text-slate-400 uppercase tracking-wider">3. 新增授權字體</label>
+                    <div class="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
+                        <p class="text-xs text-slate-400 mb-2 leading-relaxed">
+                            輸入您擁有的字體名稱（支援 Google Fonts）。
+                        </p>
+                        <div class="flex gap-2">
+                            <input type="text" id="newFontInput" placeholder="例如: Roboto" class="flex-1 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-sm focus:border-emerald-500 outline-none text-white">
+                            <button id="addFontBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white p-1.5 rounded transition-colors">
+                                <i data-lucide="plus" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 狀態指示 -->
+                <div class="mt-4 bg-slate-700/30 p-4 rounded-lg border border-slate-600">
+                    <div class="flex items-start gap-3">
+                        <i data-lucide="alert-triangle" class="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5"></i>
+                        <div>
+                            <h4 class="text-sm font-semibold text-slate-200">如何判斷?</h4>
+                            <p class="text-xs text-slate-400 mt-1">
+                                將左側紅色文字拖曳至圖片文字上方。如果字形邊緣完全重合，則該圖片極高機率使用了您選擇的授權字體。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // --- 資料狀態 ---
+        const state = {
+            licensedFonts: [
+                { name: 'Arial', source: 'System', category: 'Sans Serif' },
+                { name: 'Times New Roman', source: 'System', category: 'Serif' },
+                { name: 'Courier New', source: 'System', category: 'Monospace' },
+                { name: 'Roboto', source: 'Google', category: 'Sans Serif' },
+                { name: 'Noto Sans TC', source: 'Google', category: 'Sans Serif' },
+                { name: 'Open Sans', source: 'Google', category: 'Sans Serif' },
+            ],
+            selectedFont: null, // 初始化時設定
+            color: '#ff0000',
+            isDragging: false,
+            dragOffset: { x: 0, y: 0 },
+            position: { x: 0, y: 0 } // 將在圖片載入或視窗調整時重設
+        };
+
+        state.selectedFont = state.licensedFonts[0];
+
+        // --- DOM 元素 ---
+        const els = {
+            imageInput: document.getElementById('imageInput'),
+            clearBtn: document.getElementById('clearBtn'),
+            placeholder: document.getElementById('placeholder'),
+            uploadedImage: document.getElementById('uploadedImage'),
+            overlayText: document.getElementById('overlayText'),
+            hintBubble: document.getElementById('hintBubble'),
+            textInput: document.getElementById('textInput'),
+            sizeInput: document.getElementById('sizeInput'),
+            opacityInput: document.getElementById('opacityInput'),
+            colorPalette: document.getElementById('colorPalette'),
+            fontList: document.getElementById('fontList'),
+            currentFontSource: document.getElementById('currentFontSource'),
+            newFontInput: document.getElementById('newFontInput'),
+            addFontBtn: document.getElementById('addFontBtn'),
+            canvasArea: document.getElementById('canvasArea'),
+            dynamicFontsLink: document.getElementById('dynamic-fonts')
+        };
+
+        // --- 初始化圖示 ---
+        lucide.createIcons();
+
+        // --- 核心功能：更新 Google Fonts ---
+        function updateGoogleFonts() {
+            const googleFonts = state.licensedFonts
+                .filter(f => f.source === 'Google')
+                .map(f => f.name.replace(/ /g, '+'))
+                .join('&family=');
+
+            if (googleFonts) {
+                els.dynamicFontsLink.href = `https://fonts.googleapis.com/css2?family=${googleFonts}&display=swap`;
+            }
+        }
+
+        // --- 核心功能：渲染字體列表 ---
+        function renderFontList() {
+            els.fontList.innerHTML = '';
+            state.licensedFonts.forEach(font => {
+                const btn = document.createElement('button');
+                const isSelected = state.selectedFont.name === font.name;
+                
+                btn.className = `font-item w-full text-left px-3 py-2 rounded-lg text-sm border transition-all flex justify-between items-center group ${
+                    isSelected 
+                    ? 'active' 
+                    : 'bg-slate-700/50 border-transparent hover:bg-slate-700 text-slate-300'
+                }`;
+                
+                // 左側名稱
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = font.name;
+                nameSpan.style.fontFamily = `"${font.name}", sans-serif`;
+                
+                // 刪除按鈕
+                const delBtn = document.createElement('span');
+                delBtn.innerHTML = '<i data-lucide="trash-2" class="w-3 h-3"></i>';
+                delBtn.className = 'opacity-0 group-hover:opacity-100 hover:text-red-400 transition-opacity p-1';
+                delBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    removeFont(font.name);
+                };
+
+                btn.appendChild(nameSpan);
+                btn.appendChild(delBtn);
+
+                btn.onclick = () => selectFont(font);
+                
+                els.fontList.appendChild(btn);
+            });
+            lucide.createIcons();
+        }
+
+        // --- 邏輯操作 ---
+
+        function selectFont(font) {
+            state.selectedFont = font;
+            els.currentFontSource.textContent = font.source;
+            els.overlayText.style.fontFamily = `"${font.name}", sans-serif`;
+            renderFontList();
+        }
+
+        function addFont() {
+            const name = els.newFontInput.value.trim();
+            if (name && !state.licensedFonts.find(f => f.name.toLowerCase() === name.toLowerCase())) {
+                state.licensedFonts.push({ name: name, source: 'Google', category: 'Custom' });
+                els.newFontInput.value = '';
+                updateGoogleFonts();
+                renderFontList();
+            }
+        }
+
+        function removeFont(name) {
+            if (state.licensedFonts.length <= 1) return; // 至少保留一個
+            state.licensedFonts = state.licensedFonts.filter(f => f.name !== name);
+            if (state.selectedFont.name === name) {
+                selectFont(state.licensedFonts[0]);
+            }
+            updateGoogleFonts();
+            renderFontList();
+        }
+
+        // --- 圖片上傳處理 ---
+        els.imageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    els.uploadedImage.src = event.target.result;
+                    showEditor(true);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        els.clearBtn.addEventListener('click', () => {
+            els.imageInput.value = '';
+            showEditor(false);
+        });
+
+        function showEditor(show) {
+            if (show) {
+                els.placeholder.classList.add('hidden');
+                els.uploadedImage.classList.remove('hidden');
+                els.overlayText.classList.remove('hidden');
+                els.hintBubble.classList.remove('hidden');
+                els.clearBtn.classList.remove('hidden');
+                
+                // Reset position to center
+                const rect = els.canvasArea.getBoundingClientRect();
+                state.position = { x: rect.width / 2, y: rect.height / 2 };
+                updateOverlayPosition();
+            } else {
+                els.placeholder.classList.remove('hidden');
+                els.uploadedImage.classList.add('hidden');
+                els.overlayText.classList.add('hidden');
+                els.hintBubble.classList.add('hidden');
+                els.clearBtn.classList.add('hidden');
+            }
+        }
+
+        // --- 拖曳邏輯 ---
+        function updateOverlayPosition() {
+            els.overlayText.style.left = `${state.position.x}px`;
+            els.overlayText.style.top = `${state.position.y}px`;
+        }
+
+        els.overlayText.addEventListener('mousedown', (e) => {
+            state.isDragging = true;
+            state.dragOffset = {
+                x: e.clientX - els.overlayText.offsetLeft,
+                y: e.clientY - els.overlayText.offsetTop
+            };
+            els.overlayText.style.cursor = 'grabbing';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (state.isDragging) {
+                e.preventDefault();
+                const containerRect = els.canvasArea.getBoundingClientRect();
+                
+                // 計算相對於容器的位置
+                let newX = e.clientX - containerRect.left; // 這裡不減去 offset，因為我們用 transform translate 居中
+                let newY = e.clientY - containerRect.top;
+                
+                // 簡單的跟隨滑鼠，修正拖曳手感
+                // 直接設定 absolute left/top 為滑鼠位置，因為 translate(-50%, -50%) 會處理中心點
+                state.position = { x: newX, y: newY };
+                updateOverlayPosition();
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            state.isDragging = false;
+            els.overlayText.style.cursor = 'grab';
+        });
+
+        // --- 控制項事件 ---
+        els.textInput.addEventListener('input', (e) => els.overlayText.textContent = e.target.value);
+        els.sizeInput.addEventListener('input', (e) => els.overlayText.style.fontSize = `${e.target.value}px`);
+        els.opacityInput.addEventListener('input', (e) => els.overlayText.style.opacity = e.target.value);
+        
+        // 顏色選擇器生成
+        const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffffff', '#000000', '#ffff00'];
+        colors.forEach(c => {
+            const btn = document.createElement('button');
+            btn.className = 'w-6 h-6 rounded-full border border-slate-500 hover:scale-110 transition-transform';
+            btn.style.backgroundColor = c;
+            btn.onclick = () => {
+                state.color = c;
+                els.overlayText.style.color = c;
+                // 更新 UI 狀態 (邊框)
+                Array.from(els.colorPalette.children).forEach(b => b.classList.remove('ring-2', 'ring-white'));
+                btn.classList.add('ring-2', 'ring-white');
+            };
+            els.colorPalette.appendChild(btn);
+        });
+        
+        // 新增字體按鈕事件
+        els.addFontBtn.addEventListener('click', addFont);
+        els.newFontInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') addFont();
+        });
+
+        // --- 初始化 ---
+        updateGoogleFonts();
+        renderFontList();
+        // 預設選中第一個顏色
+        els.colorPalette.children[0].click();
+
+    </script>
+</body>
+</html>
