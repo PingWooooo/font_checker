@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tab 導航範例</title>
+    <style>
+        /* CSS 樣式：美化 Tab 導航 */
+        body { font-family: Arial, sans-serif; }
+
+        /* Tab 按鈕容器 */
+        .tab {
+            overflow: hidden;
+            border: 1px solid #ccc;
+            background-color: #f1f1f1;
+        }
+
+        /* Tab 按鈕 */
+        .tab button {
+            background-color: inherit;
+            float: left;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            padding: 14px 16px;
+            transition: 0.3s;
+            font-size: 17px;
+        }
+
+        /* 滑鼠移到 Tab 按鈕上時的樣式 */
+        .tab button:hover {
+            background-color: #ddd;
+        }
+
+        /* 啟動中的 Tab 按鈕樣式 */
+        .tab button.active {
+            background-color: #ccc;
+        }
+
+        /* Tab 內容 */
+        .tabcontent {
+            display: none; /* 預設隱藏所有內容 */
+            padding: 6px 12px;
+            border: 1px solid #ccc;
+            border-top: none;
+            min-height: 200px; /* 最小高度 */
+        }
+        
+        /* 內嵌網頁的 iframe 樣式 */
+        .tabcontent iframe {
+            width: 100%;
+            height: 400px;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🌐 網址 Tab 導航</h1>
+    <p>點擊下方的 Tab 按鈕來切換顯示不同的網頁內容。</p>
+
+    <div class="tab">
+        <button class="tablinks active" onclick="openURL(event, 'Tab1')">Google 搜尋</button>
+        <button class="tablinks" onclick="openURL(event, 'Tab2')">Google 文件</button>
+        <button class="tablinks" onclick="openURL(event, 'Tab3')">Google 地圖</button>
+    </div>
+
+    <div id="Tab1" class="tabcontent" style="display: block;">
+        <h3>Google 搜尋</h3>
+        <p>這是一個 Google 搜尋頁面範例。</p>
+        <iframe src="https://www.google.com/"></iframe>
+    </div>
+
+    <div id="Tab2" class="tabcontent">
+        <h3>Google 文件</h3>
+        <p>這是一個 Google 文件（Docs）的連結範例。由於安全限制，可能無法直接嵌入，這裡使用 Google 的首頁代替。</p>
+        <iframe src="https://docs.google.com/"></iframe>
+    </div>
+
+    <div id="Tab3" class="tabcontent">
+        <h3>Google 地圖</h3>
+        <p>這是一個 Google 地圖的連結範例。</p>
+        <iframe src="https://maps.google.com/"></iframe>
+    </div>
+
+    <script>
+        function openURL(evt, urlName) {
+            var i, tabcontent, tablinks;
+
+            // 1. 隱藏所有 Tab 內容
+            tabcontent = document.getElementsByClassName("tabcontent");
+            for (i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = "none";
+            }
+
+            // 2. 移除所有 Tab 按鈕的 active 類別
+            tablinks = document.getElementsByClassName("tablinks");
+            for (i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(" active", "");
+            }
+
+            // 3. 顯示當前選中的 Tab 內容，並將按鈕標記為 active
+            document.getElementById(urlName).style.display = "block";
+            evt.currentTarget.className += " active";
+        }
+        
+        // 預設載入時顯示第一個 Tab
+        // 由於我們已經在 Tab1 內設定了 style="display: block;"
+        // 且第一個按鈕設定了 class="active"
+        // 如果需要動態控制，可以使用：
+        // document.getElementsByClassName("tablinks")[0].click(); 
+    </script>
+
+</body>
+</html>
