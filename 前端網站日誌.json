@@ -1,0 +1,42 @@
+[
+{
+"@timestamp": "2025-11-27T14:30:00.789Z",
+"level": "Debug",
+"message": "使用者 'jane_doe' 載入了產品清單頁面，執行時間 45ms。",
+"logger": "WebApp.Performance",
+"properties": {
+"Application": "UserInterface",
+"UserId": 2005
+}
+},
+{
+"@timestamp": "2025-11-27T14:31:15.111Z",
+"level": "Info",
+"message": "使用者 'jane_doe' 成功將 'Product X' 加入購物車。",
+"logger": "WebApp.CartController",
+"properties": {
+"Application": "UserInterface",
+"ProductSku": "PX-300",
+"Quantity": 1
+}
+},
+{
+"@timestamp": "2025-11-27T14:32:40.222Z",
+"level": "Warn",
+"message": "舊版 API (v1) 即將棄用，建議升級至 v2。",
+"logger": "WebApp.ApiConsumer",
+"properties": {
+"Application": "UserInterface",
+"Endpoint": "/api/v1/deprecated"
+}
+},
+{
+"@timestamp": "2025-11-27T14:35:01.333Z",
+"level": "Debug",
+"message": "正在刷新用戶會話令牌 (Session Token)。",
+"logger": "WebApp.AuthService",
+"properties": {
+"Application": "UserInterface"
+}
+}
+]

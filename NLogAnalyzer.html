@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NLog JSON 日誌解析工具 (含模式分析)</title>
+    <!-- 載入 Tailwind CSS (CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 載入 React 和 Babel (CDN) -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        /* 使用 Inter 字體 */
+        body { font-family: 'Inter', sans-serif; }
+        
+        /* 自定義滾動條樣式 */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1;
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background-color: #f1f5f9;
+        }
+        /* 隱藏原生檔案輸入框 */
+        input[type="file"] {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            border: 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+    const { useState, useMemo, useRef, useEffect } = React;
+
+    // --- 內嵌 Lucide Icons 避免 CDN Import 失敗 (簡化版) ---
+    const IconWrapper = ({ children, size = 24, className = "" }) => (
+        <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+            {children}
+        </svg>
+    );
+
+    const Upload = (props) => ( <IconWrapper {...props}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></IconWrapper> );
+    const Search = (props) => ( <IconWrapper {...props}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></IconWrapper> );
+    const Filter = (props) => ( <IconWrapper {...props}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></IconWrapper> );
+    const FileText = (props) => ( <IconWrapper {...props}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></IconWrapper> );
+    const AlertTriangle = (props) => ( <IconWrapper {...props}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h18.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></IconWrapper> );
+    const Info = (props) => ( <IconWrapper {...props}><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></IconWrapper> );
+    const XCircle = (props) => ( <IconWrapper {...props}><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></IconWrapper> );
+    const CheckCircle = (props) => ( <IconWrapper {...props}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></IconWrapper> );
+    const ChevronDown = (props) => ( <IconWrapper {...props}><polyline points="6 9 12 15 18 9"/></IconWrapper> );
+    const ChevronRight = (props) => ( <IconWrapper {...props}><polyline points="9 18 15 12 9 6"/></IconWrapper> );
+    const Trash2 = (props) => ( <IconWrapper {...props}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M2 6h20"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></IconWrapper> );
+    const Activity = (props) => ( <IconWrapper {...props}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></IconWrapper> );
+    const Calendar = (props) => ( <IconWrapper {...props}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></IconWrapper> );
+    const Layers = (props) => ( <IconWrapper {...props}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/></IconWrapper> );
+    const Zap = (props) => ( <IconWrapper {...props}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></IconWrapper> );
+    // --- NLogAnalyzer.jsx 內容開始 ---
+
+    // 設定各種 Log Level 的顏色與圖示
+    const LEVEL_CONFIG = {
+      Trace: { color: 'bg-gray-100 text-gray-600 border-gray-300', icon: Activity },
+      Debug: { color: 'bg-blue-50 text-blue-600 border-blue-200', icon: Info },
+      Info:  { color: 'bg-green-50 text-green-600 border-green-200', icon: CheckCircle },
+      Warn:  { color: 'bg-yellow-50 text-yellow-700 border-yellow-300', icon: AlertTriangle },
+      Error: { color: 'bg-red-50 text-red-600 border-red-200', icon: XCircle },
+      Fatal: { color: 'bg-red-100 text-red-800 border-red-500', icon: AlertTriangle },
+    };
+    
+    /**
+     * 主流日誌分析功能：將日誌訊息標準化為模式 (Pattern)
+     * 替換 GUID、數字和引號字串為佔位符
+     */
+    const generatePattern = (message) => {
+        let pattern = message;
+        
+        // 1. 替換 GUIDs: e.g., a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11 -> {GUID}
+        pattern = pattern.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '{GUID}');
+        
+        // 2. 替換數字 (整數和浮點數): e.g., 123, 45.67 -> {NUMBER}
+        pattern = pattern.replace(/\b\d+(\.\d+)?\b/g, '{NUMBER}');
+
+        // 3. 替換單引號或雙引號包裹的字串: e.g., 'user-a', "path/to/file" -> {STRING}
+        pattern = pattern.replace(/(['"])(.*?)\1/g, '{STRING}');
+
+        // 4. 清理多餘的空格
+        pattern = pattern.replace(/\s+/g, ' ').trim();
+        
+        return pattern;
+    };
+
+    // 輔助函式：解析 JSON Log
+    const parseLogFile = async (file) => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const text = e.target.result;
+          const parsedLogs = [];
+          const fileName = file.name;
+
+          try {
+            // 嘗試 1: 當作標準 JSON Array 解析
+            const json = JSON.parse(text);
+            if (Array.isArray(json)) {
+              json.forEach(item => parsedLogs.push(normalizeLog(item, fileName)));
+            } else {
+              parsedLogs.push(normalizeLog(json, fileName));
+            }
+          } catch (err) {
+            // 嘗試 2: 當作 NDJSON (一行一個 JSON 物件) 解析
+            const lines = text.split('\n');
+            lines.forEach((line, index) => {
+              if (!line.trim()) return;
+              try {
+                const item = JSON.parse(line);
+                parsedLogs.push(normalizeLog(item, fileName));
+              } catch (lineErr) {
+                console.warn(`無法解析檔案 ${fileName} 的第 ${index + 1} 行`, lineErr);
+              }
+            });
+          }
+          resolve(parsedLogs);
+        };
+        reader.onerror = reject;
+        reader.readAsText(file);
+      });
+    };
+
+    // 統一 Log 結構
+    const normalizeLog = (raw, fileName) => {
+      // NLog 的欄位名稱可能會變，這裡做一些容錯處理
+      const timestamp = raw['@timestamp'] || raw.time || raw.date || raw.TimeStamp || new Date().toISOString();
+      const level = raw.level || raw.Level || 'Info';
+      const message = raw.message || raw.messageTemplate || raw.Message || '';
+      const logger = raw.logger || raw.LoggerName || 'Unknown';
+      const pattern = generatePattern(message); // <-- 新增的模式欄位
+      
+      // 嘗試找出專案名稱：優先看 properties 裡的 Project/Application，沒有則用 Logger 或檔名
+      let project = fileName.replace('.json', '').replace('.log', '');
+      if (raw.properties && raw.properties.Project) project = raw.properties.Project;
+      else if (raw.properties && raw.properties.Application) project = raw.properties.Application;
+      
+      return {
+        id: Math.random().toString(36).substr(2, 9),
+        timestamp,
+        level: Object.keys(LEVEL_CONFIG).find(k => k.toLowerCase() === level.toLowerCase()) || 'Info',
+        message,
+        pattern,
+        logger,
+        project, // 這是分組的關鍵
+        exception: raw.exception || raw.Exception || null,
+        properties: raw.properties || {},
+        raw: raw // 保留原始資料以便查看
+      };
+    };
+
+    const LogItem = ({ log, index }) => {
+      const [expanded, setExpanded] = useState(false);
+      const Config = LEVEL_CONFIG[log.level] || LEVEL_CONFIG.Info;
+      const Icon = Config.icon;
+
+      // 格式化時間
+      const timeString = new Date(log.timestamp).toLocaleString('zh-TW', {
+        month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+      });
+
+      return (
+        <div className={`border-l-4 ${Config.color.split(' ')[2].replace('border', 'border-l')} bg-white shadow-sm rounded-r-md mb-2 overflow-hidden transition-all duration-200 hover:shadow-md`}>
+          <div 
+            className="p-3 flex items-start gap-3 cursor-pointer select-none"
+            onClick={() => setExpanded(!expanded)}
+          >
+            <div className={`mt-1 p-1 rounded-full ${Config.color.split(' ')[0]}`}>
+              <Icon size={16} className={Config.color.split(' ')[1]} />
+            </div>
+            
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <span className="text-xs font-mono text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1">
+                  <Calendar size={10} />
+                  {timeString}
+                </span>
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${Config.color}`}>
+                  {log.level.toUpperCase()}
+                </span>
+                <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 flex items-center gap-1">
+                  <Layers size={10} />
+                  {log.project}
+                </span>
+                <span className="text-xs text-gray-400 truncate max-w-[150px]" title={log.logger}>
+                  {log.logger}
+                </span>
+              </div>
+              
+              <div className="text-sm text-gray-800 font-medium break-words leading-relaxed">
+                {log.message}
+              </div>
+
+              {/* 顯示標準化模式以供參考 */}
+              <div className="mt-1 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded inline-block max-w-full truncate" title={log.pattern}>
+                  <Zap size={10} className="inline mr-1 text-yellow-600" />
+                  模式: <span className="font-mono">{log.pattern}</span>
+              </div>
+
+              {log.exception && (
+                <div className="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded border border-red-100 truncate">
+                  ⚠ 包含例外狀況 (點擊展開詳情)
+                </div>
+              )}
+            </div>
+
+            <div className="text-gray-400 mt-1">
+              {expanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+            </div>
+          </div>
+
+          {expanded && (
+            <div className="bg-gray-50 border-t border-gray-100 p-4 text-xs font-mono overflow-x-auto">
+              {log.exception && (
+                <div className="mb-4">
+                  <h4 className="font-bold text-red-600 mb-1">Exception Details:</h4>
+                  <pre className="whitespace-pre-wrap text-red-800 bg-red-50 p-2 rounded border border-red-100">
+                    {typeof log.exception === 'string' ? log.exception : JSON.stringify(log.exception, null, 2)}
+                  </pre>
+                </div>
+              )}
+              
+              <div className="mb-4">
+                <h4 className="font-bold text-gray-600 mb-1">Properties:</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {Object.entries(log.properties).map(([key, value]) => (
+                    <div key={key} className="flex gap-2 p-1 border-b border-gray-200">
+                      <span className="font-semibold text-gray-500">{key}:</span>
+                      <span className="text-gray-700 break-all">{String(value)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-bold text-gray-600 mb-1">Raw JSON:</h4>
+                <pre className="text-gray-500 bg-gray-100 p-2 rounded">{JSON.stringify(log.raw, null, 2)}</pre>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    function NLogAnalyzer() {
+      const [logs, setLogs] = useState([]);
+      const [loading, setLoading] = useState(false);
+      const [error, setError] = useState(null);
+      const [dragActive, setDragActive] = useState(false);
+
+      // Filters
+      const [searchQuery, setSearchQuery] = useState('');
+      const [selectedLevels, setSelectedLevels] = useState(new Set(['Info', 'Warn', 'Error', 'Fatal']));
+      const [selectedProjects, setSelectedProjects] = useState(new Set());
+      const [selectedPattern, setSelectedPattern] = useState(null); // <-- 新增：選定的日誌模式
+
+      // Pagination / Virtualization Sim
+      const [displayLimit, setDisplayLimit] = useState(50);
+
+      // 統計與選項資料 (包含模式統計)
+      const stats = useMemo(() => {
+        const allProjects = new Set();
+        const levelCounts = { Trace: 0, Debug: 0, Info: 0, Warn: 0, Error: 0, Fatal: 0 };
+        const patternCounts = {};
+        
+        logs.forEach(log => {
+          allProjects.add(log.project);
+          if (levelCounts[log.level] !== undefined) {
+            levelCounts[log.level]++;
+          }
+          // 模式統計
+          patternCounts[log.pattern] = (patternCounts[log.pattern] || 0) + 1;
+        });
+
+        // 將模式轉換為陣列並按計數排序 (前 100 個)
+        const patterns = Object.entries(patternCounts)
+            .map(([pattern, count]) => ({ pattern, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 100); // 只顯示前 100 個最常見模式
+
+        return {
+          projects: Array.from(allProjects).sort(),
+          levelCounts,
+          patterns
+        };
+      }, [logs]);
+
+      // 當 logs 更新時，預設選取所有專案
+      useEffect(() => {
+        if (stats.projects.length > 0 && selectedProjects.size === 0) {
+          setSelectedProjects(new Set(stats.projects));
+        }
+      }, [stats.projects]);
+
+      const handleFiles = async (files) => {
+        setLoading(true);
+        setError(null);
+        try {
+          const allParsedLogs = [];
+          for (let i = 0; i < files.length; i++) {
+            const parsed = await parseLogFile(files[i]);
+            allParsedLogs.push(...parsed);
+          }
+          
+          // 合併並依時間排序 (新 -> 舊)
+          setLogs(prev => [...prev, ...allParsedLogs].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
+          setDisplayLimit(50); // 重置顯示數量
+        } catch (err) {
+          setError("解析檔案時發生錯誤，請確認格式是否為 JSON。");
+          console.error(err);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const handleDrag = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.type === "dragenter" || e.type === "dragover") {
+          setDragActive(true);
+        } else if (e.type === "dragleave") {
+          setDragActive(false);
+        }
+      };
+
+      const handleDrop = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragActive(false);
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+          handleFiles(e.dataTransfer.files);
+        }
+      };
+
+      const clearLogs = () => {
+        setLogs([]);
+        setSelectedProjects(new Set());
+        setSearchQuery('');
+        setSelectedPattern(null);
+      };
+
+      // 過濾邏輯
+      const filteredLogs = useMemo(() => {
+        const query = searchQuery.toLowerCase();
+        return logs.filter(log => {
+          const matchLevel = selectedLevels.has(log.level);
+          const matchProject = selectedProjects.has(log.project);
+          const matchPattern = !selectedPattern || log.pattern === selectedPattern; // <-- 新增模式過濾
+          
+          // 搜尋：比對 Message, Logger, Exception, 甚至是原始 JSON 字串
+          const matchSearch = !query || 
+            log.message.toLowerCase().includes(query) || 
+            log.logger.toLowerCase().includes(query) ||
+            (log.exception && JSON.stringify(log.exception).toLowerCase().includes(query));
+
+          return matchLevel && matchProject && matchPattern && matchSearch;
+        });
+      }, [logs, selectedLevels, selectedProjects, searchQuery, selectedPattern]);
+
+      const displayedLogs = filteredLogs.slice(0, displayLimit);
+
+      const toggleLevel = (level) => {
+        const newSet = new Set(selectedLevels);
+        if (newSet.has(level)) newSet.delete(level);
+        else newSet.add(level);
+        setSelectedLevels(newSet);
+      };
+
+      const toggleProject = (proj) => {
+        const newSet = new Set(selectedProjects);
+        if (newSet.has(proj)) newSet.delete(proj);
+        else newSet.add(proj);
+        setSelectedProjects(newSet);
+      };
+
+      const toggleAllProjects = () => {
+        if (selectedProjects.size === stats.projects.length) {
+          setSelectedProjects(new Set());
+        } else {
+          setSelectedProjects(new Set(stats.projects));
+        }
+      };
+
+      return (
+        <div className="min-h-screen bg-gray-100 text-gray-800 font-sans flex flex-col h-screen">
+          {/* Header */}
+          <header className="bg-white border-b border-gray-200 px-6 py-4 shadow-sm flex items-center justify-between z-10">
+            <div className="flex items-center gap-3">
+              <div className="bg-blue-600 p-2 rounded-lg">
+                <FileText className="text-white" size={24} />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-gray-800">NLog 解析分析工具</h1>
+                <p className="text-xs text-gray-500">具備**模式分析**能力，快速找到主要問題</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-4">
+              <div className="text-right hidden md:block">
+                <div className="text-sm font-semibold text-gray-700">總筆數: {logs.length.toLocaleString()}</div>
+                <div className="text-xs text-gray-500">篩選後: {filteredLogs.length.toLocaleString()}</div>
+              </div>
+              <button 
+                onClick={clearLogs}
+                className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 bg-red-50 hover:bg-red-100 rounded-md transition-colors"
+                disabled={logs.length === 0}
+              >
+                <Trash2 size={16} />
+                清除全部
+              </button>
+            </div>
+          </header>
+
+          <div className="flex flex-1 overflow-hidden">
+            {/* Sidebar Controls */}
+            <aside className="w-80 bg-white border-r border-gray-200 flex flex-col overflow-hidden z-20 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
+              <div className="p-4 border-b border-gray-100 overflow-y-auto flex-1 custom-scrollbar">
+                
+                {/* Upload Area */}
+                <div className="mb-6">
+                  <label className="text-sm font-bold text-gray-700 mb-2 block">匯入日誌檔案 (JSON)</label>
+                  <div 
+                    className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                      dragActive ? "border-blue-500 bg-blue-50" : "border-gray-300 hover:border-blue-400 hover:bg-gray-50"
+                    }`}
+                    onDragEnter={handleDrag}
+                    onDragLeave={handleDrag}
+                    onDragOver={handleDrag}
+                    onDrop={handleDrop}
+                    onClick={() => document.getElementById('fileUpload').click()}
+                  >
+                    <Upload className="mx-auto text-gray-400 mb-2" size={24} />
+                    <p className="text-sm text-gray-600">點擊或拖曳檔案至此</p>
+                    <p className="text-xs text-gray-400 mt-1">支援 .json, .log</p>
+                    <input 
+                      id="fileUpload" 
+                      type="file" 
+                      multiple 
+                      accept=".json,.log,.txt" 
+                      onChange={(e) => handleFiles(e.target.files)}
+                    />
+                  </div>
+                </div>
+
+                {/* Search */}
+                <div className="mb-6">
+                  <label className="text-sm font-bold text-gray-700 mb-2 block">關鍵字搜尋</label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                    <input 
+                      type="text" 
+                      placeholder="搜尋 Message, Exception..." 
+                      className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Pattern Filter (新功能) */}
+                <div className="mb-6 border-t pt-4 border-gray-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-bold text-gray-700 flex items-center gap-1">
+                        <Zap size={14} className="text-yellow-600" />
+                        日誌模式分析 (前 {stats.patterns.length})
+                    </label>
+                    <button 
+                        onClick={() => setSelectedPattern(null)}
+                        className={`text-xs px-2 py-0.5 rounded transition-all ${selectedPattern ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' : 'text-gray-400'}`}
+                        disabled={!selectedPattern}
+                    >
+                        {selectedPattern ? '取消模式篩選' : '已顯示所有模式'}
+                    </button>
+                  </div>
+                  
+                  {stats.patterns.length === 0 ? (
+                    <div className="text-xs text-gray-400 italic p-2 bg-gray-50 rounded">請先上傳日誌進行模式分析</div>
+                  ) : (
+                    <div className="space-y-1 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                      {stats.patterns.map(({ pattern, count }) => (
+                        <div 
+                          key={pattern} 
+                          onClick={() => setSelectedPattern(pattern === selectedPattern ? null : pattern)}
+                          className={`flex items-center gap-2 p-1.5 rounded cursor-pointer transition-colors border ${
+                            pattern === selectedPattern 
+                                ? 'bg-blue-50 border-blue-500 ring-2 ring-blue-300' 
+                                : 'bg-white border-gray-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-mono text-gray-700 truncate" title={pattern}>{pattern}</div>
+                            <div className="text-xs text-gray-400 mt-0.5">出現次數: {count.toLocaleString()}</div>
+                          </div>
+                          <span className={`text-sm font-bold w-12 text-center py-0.5 rounded-full ${
+                            pattern === selectedPattern ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'
+                          }`}>
+                            {count}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+
+                {/* Level Filter */}
+                <div className="mb-6 border-t pt-4 border-gray-100">
+                  <label className="text-sm font-bold text-gray-700 mb-2 block">Log 等級</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {Object.keys(LEVEL_CONFIG).map(level => (
+                      <button
+                        key={level}
+                        onClick={() => toggleLevel(level)}
+                        className={`flex items-center gap-2 px-2 py-1.5 rounded border text-xs transition-all ${
+                          selectedLevels.has(level) 
+                            ? LEVEL_CONFIG[level].color 
+                            : 'bg-white text-gray-400 border-gray-200 opacity-60 hover:opacity-100'
+                        }`}
+                      >
+                        <div className={`w-2 h-2 rounded-full ${selectedLevels.has(level) ? 'bg-current' : 'bg-gray-300'}`} />
+                        {level} 
+                        <span className="ml-auto text-xs opacity-70">
+                          {stats.levelCounts[level] || 0}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Project Filter */}
+                <div className="mb-6 border-t pt-4 border-gray-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-bold text-gray-700">專案 / 來源</label>
+                    <button 
+                      onClick={toggleAllProjects}
+                      className="text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                    >
+                      {selectedProjects.size === stats.projects.length ? '取消全選' : '全選'}
+                    </button>
+                  </div>
+                  
+                  {stats.projects.length === 0 ? (
+                    <div className="text-xs text-gray-400 italic p-2 bg-gray-50 rounded">尚未載入專案資料</div>
+                  ) : (
+                    <div className="space-y-1 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                      {stats.projects.map(proj => (
+                        <label key={proj} className="flex items-center gap-2 p-1.5 hover:bg-gray-50 rounded cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            checked={selectedProjects.has(proj)}
+                            onChange={() => toggleProject(proj)}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                          />
+                          <span className="text-sm text-gray-700 truncate" title={proj}>{proj}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              <div className="p-4 border-t border-gray-200 bg-gray-50">
+                <div className="text-xs text-gray-400 text-center">
+                  解析 NLog JSON Layout 格式
+                </div>
+              </div>
+            </aside>
+
+            {/* Main Content */}
+            <main className="flex-1 bg-gray-100 overflow-y-auto p-4 md:p-6" id="scroll-container">
+              {loading && (
+                <div className="flex flex-col items-center justify-center h-full text-gray-500">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"></div>
+                  <p>正在解析日誌檔案...</p>
+                </div>
+              )}
+
+              {!loading && error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md flex items-center gap-3 mb-4">
+                  <AlertTriangle size={20} />
+                  {error}
+                </div>
+              )}
+
+              {!loading && !error && logs.length === 0 && (
+                <div className="flex flex-col items-center justify-center h-full text-gray-400 opacity-60">
+                  <Filter size={64} className="mb-4" />
+                  <p className="text-lg font-medium">尚無資料</p>
+                  <p className="text-sm">請從左側上傳 NLog JSON 檔案</p>
+                </div>
+              )}
+
+              {!loading && logs.length > 0 && filteredLogs.length === 0 && (
+                <div className="flex flex-col items-center justify-center h-full text-gray-500">
+                  <Search size={48} className="mb-4 text-gray-300" />
+                  <p>沒有符合篩選條件的日誌</p>
+                  <button onClick={() => {setSelectedLevels(new Set(['Info', 'Warn', 'Error', 'Fatal'])); setSearchQuery(''); setSelectedPattern(null);}} className="mt-2 text-blue-600 hover:underline">
+                    重置篩選
+                  </button>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                {displayedLogs.map((log, index) => (
+                  <LogItem key={log.id} log={log} index={index} />
+                ))}
+              </div>
+
+              {filteredLogs.length > displayLimit && (
+                <div className="text-center py-6">
+                  <button 
+                    onClick={() => setDisplayLimit(prev => prev + 50)}
+                    className="bg-white border border-gray-300 text-gray-700 px-6 py-2 rounded-full shadow-sm hover:bg-gray-50 hover:shadow-md transition-all text-sm font-medium"
+                  >
+                    載入更多 ({filteredLogs.length - displayLimit} 筆剩餘)
+                  </button>
+                </div>
+              )}
+            </main>
+          </div>
+        </div>
+      );
+    }
+    
+    // 渲染應用程式 (使用 createRoot for React 18 compatibility)
+    const container = document.getElementById('root');
+    const root = ReactDOM.createRoot(container);
+    root.render(<NLogAnalyzer />);
+
+    // --- NLogAnalyzer.jsx 內容結束 ---
+    </script>
+</body>
+</html>

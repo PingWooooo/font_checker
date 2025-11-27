@@ -1,0 +1,47 @@
+[
+{
+"@timestamp": "2025-11-26T10:00:00.123Z",
+"level": "Info",
+"message": "資料庫連線成功，開始處理批次作業。",
+"logger": "BackendService.Startup",
+"properties": {
+"Project": "OrderProcessor",
+"UserId": 1001
+}
+},
+{
+"@timestamp": "2025-11-26T10:05:30.456Z",
+"level": "Error",
+"message": "處理訂單 #98765 時發生例外狀況：客戶資料遺失。",
+"logger": "BackendService.Handlers.OrderHandler",
+"exception": {
+"Type": "System.NullReferenceException",
+"Message": "Object reference not set to an instance of an object.",
+"StackTrace": "   at BackendService.Handlers.OrderHandler.ProcessOrder(Int32 orderId) in c:\src\handler.cs:line 45\r\n   at BackendService.Worker.DoWork()",
+"Data": {}
+},
+"properties": {
+"Project": "OrderProcessor",
+"OrderId": 98765
+}
+},
+{
+"@timestamp": "2025-11-26T10:05:30.457Z",
+"level": "Fatal",
+"message": "批次作業執行失敗，系統即將關閉。",
+"logger": "BackendService.SystemMonitor",
+"properties": {
+"Project": "OrderProcessor",
+"Reason": "CriticalFailure"
+}
+},
+{
+"@timestamp": "2025-11-26T10:15:00.000Z",
+"level": "Info",
+"message": "系統重啟完成，進入待機模式。",
+"logger": "BackendService.Startup",
+"properties": {
+"Project": "OrderProcessor"
+}
+}
+]
