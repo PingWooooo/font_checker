@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>生物科技模具管理系統 - 登入</title>
+    <style>
+        /* 全局設定 */
+        body, html {
+            height: 100%;
+            margin: 0;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden; /* 隱藏滾動條 */
+        }
+
+        /* 背景圖片與遮罩 */
+        .bg-image {
+            background-image: url('image_2.png');
+            height: 100%;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-size: cover;
+            position: relative;
+        }
+        .bg-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 25, 40, 0.65); /* 深藍色半透明遮罩，增加科技感 */
+            z-index: 1;
+        }
+
+        /* 登入容器 */
+        .login-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2;
+            background: rgba(15, 30, 50, 0.85); /* 半透明深色背景 */
+            padding: 3rem;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 191, 255, 0.3); /* 藍色科技感陰影 */
+            text-align: center;
+            color: #ffffff;
+            border: 1px solid rgba(0, 191, 255, 0.3);
+            backdrop-filter: blur(8px); /* 毛玻璃效果 */
+            max-width: 450px;
+            width: 90%;
+        }
+
+        /* 標題與標誌 */
+        .login-header {
+            margin-bottom: 2.5rem;
+        }
+        .login-header h1 {
+            font-size: 2.2rem;
+            margin: 0;
+            font-weight: 600;
+            color: #00d2ff; /* 科技藍色 */
+            text-shadow: 0 0 10px rgba(0, 210, 255, 0.5);
+        }
+        .login-header p {
+            margin-top: 0.5rem;
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        .logo-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            color: #00d2ff;
+            display: inline-block;
+            text-shadow: 0 0 15px rgba(0, 210, 255, 0.8);
+        }
+
+        /* 表單元素 */
+        .input-group {
+            margin-bottom: 1.5rem;
+            text-align: left;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #b0e0ff; /* 淺藍色標籤 */
+        }
+        .input-field {
+            width: 100%;
+            padding: 0.8rem 1rem;
+            border: 2px solid rgba(0, 191, 255, 0.4);
+            background: rgba(5, 15, 25, 0.6);
+            border-radius: 8px;
+            color: #ffffff;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            box-sizing: border-box; /* 確保 padding 不會增加寬度 */
+        }
+        .input-field:focus {
+            outline: none;
+            border-color: #00d2ff;
+            box-shadow: 0 0 12px rgba(0, 210, 255, 0.5);
+        }
+
+        /* 按鈕與連結 */
+        .login-btn {
+            width: 100%;
+            padding: 1rem;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #0072ff, #00c6ff);
+            color: #ffffff;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+        .login-btn:hover {
+            background: linear-gradient(135deg, #005bbb, #00aadd);
+            box-shadow: 0 4px 15px rgba(0, 198, 255, 0.4);
+        }
+        .extra-links {
+            margin-top: 1.5rem;
+            font-size: 0.9rem;
+            display: flex;
+            justify-content: space-between;
+        }
+        .extra-links a {
+            color: #00d2ff;
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+        .extra-links a:hover {
+            color: #80e5ff;
+            text-decoration: underline;
+        }
+
+        /* 圖示字體 */
+        @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css');
+    </style>
+</head>
+<body>
+    <div class="bg-image">
+        <div class="bg-overlay"></div>
+    </div>
+
+    <div class="login-container">
+        <div class="login-header">
+            <div class="logo-icon">
+                <i class="fa-solid fa-dna"></i> </div>
+            <h1>生物科技模具管理系統</h1>
+            <p>請登入您的帳戶</p>
+        </div>
+        <form action="#" method="post">
+            <div class="input-group">
+                <label for="username"><i class="fa-solid fa-user me-2"></i> 使用者名稱</label>
+                <input type="text" id="username" name="username" class="input-field" required placeholder="請輸入使用者名稱">
+            </div>
+            <div class="input-group">
+                <label for="password"><i class="fa-solid fa-lock me-2"></i> 密碼</label>
+                <input type="password" id="password" name="password" class="input-field" required placeholder="請輸入密碼">
+            </div>
+            <button type="submit" class="login-btn">登入 <i class="fa-solid fa-arrow-right-to-bracket ms-2"></i></button>
+        </form>
+        <div class="extra-links">
+            <a href="#">忘記密碼?</a>
+            <a href="#">註冊新帳戶</a>
+        </div>
+    </div>
+
+    <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+</body>
+</html>
