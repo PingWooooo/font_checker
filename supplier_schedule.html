@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>全月份矩陣式排程系統</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
+    <style>
+        body { background-color: #f8f9fa; }
+        .table-container {
+            background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            overflow-x: auto; max-width: 100%; position: relative; max-height: 70vh;
+        }
+        .matrix-table { min-width: 100%; border-collapse: separate; border-spacing: 0; }
+        .matrix-table th, .matrix-table td {
+            border: 1px solid #dee2e6; padding: 6px 8px; white-space: nowrap; text-align: center; vertical-align: middle;
+        }
+        
+        /* Sticky Columns */
+        .col-part { position: sticky; left: 0; background-color: #fff; z-index: 3; width: 120px; border-right: 2px solid #ccc !important; font-weight: bold; }
+        .col-type { position: sticky; left: 120px; background-color: #f8f9fa; z-index: 3; width: 100px; border-right: 2px solid #ccc !important; text-align: left !important; }
+        .matrix-table thead th { position: sticky; top: 0; background-color: #e9ecef; z-index: 2; height: 50px; }
+        .matrix-table thead th.col-part, .matrix-table thead th.col-type { z-index: 4; background-color: #e2e6ea; }
+        
+        .input-qty { width: 60px; text-align: right; border: 1px solid #ced4da; border-radius: 4px; }
+        .bg-diff { background-color: #fff3cd !important; color: #856404; font-weight: bold; }
+        .bg-ok { color: #198754; }
+        .row-separator td { border-bottom: 2px solid #444 !important; }
+    </style>
+</head>
+<body>
+
+<div id="app" class="container-fluid py-3">
+    
+    <div class="card mb-3 shadow-sm border-0">
+        <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
+            <div>
+                <h4 class="mb-1"><i class="bi bi-calendar3-range"></i> 全月份排程管理</h4>
+                <div class="text-muted small">
+                    目前顯示: <span class="badge bg-secondary">{{ currentMonth }}</span> | 
+                    匯出與上傳將包含 <strong>所有月份</strong>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <input type="text" class="form-control" v-model="searchKeyword" placeholder="搜尋料號..." style="width: 150px;">
+                
+                <button class="btn btn-success text-white" @click="exportToExcel">
+                    <i class="bi bi-file-earmark-spreadsheet"></i> 匯出所有月份 Excel
+                </button>
+                
+                <label class="btn btn-outline-primary" style="cursor: pointer;">
+                    <i class="bi bi-upload"></i> 上傳更新 (讀取多Sheet)
+                    <input type="file" @change="handleFileUpload" accept=".xlsx, .xls" hidden>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <ul class="nav nav-tabs mb-2 px-1">
+        <li class="nav-item" v-for="month in monthList" :key="month">
+            <a class="nav-link" :class="{ active: currentMonth === month }" href="#" @click.prevent="currentMonth = month">
+                {{ month }}
+            </a>
+        </li>
+    </ul>
+
+    <div class="table-container">
+        <table class="matrix-table">
+            <thead>
+                <tr>
+                    <th class="col-part">料號</th>
+                    <th class="col-type">項目</th>
+                    <th v-for="date in datesInCurrentMonth" :key="date">
+                        {{ formatDateShort(date) }}
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                <template v-for="partNo in filteredParts" :key="partNo">
+                    <tr>
+                        <td class="col-part" rowspan="3" style="vertical-align: top; padding-top: 15px;">{{ partNo }}</td>
+                        <td class="col-type">計畫出貨</td>
+                        <td v-for="date in datesInCurrentMonth" :key="date+'_p'">
+                            {{ getData(partNo, date).plannedQty }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="col-type">確認出貨</td>
+                        <td v-for="date in datesInCurrentMonth" :key="date+'_c'">
+                            <input type="number" class="input-qty" 
+                                   v-if="getData(partNo, date).id"
+                                   v-model.number="getData(partNo, date).confirmedQty" min="0">
+                        </td>
+                    </tr>
+                    <tr class="row-separator">
+                        <td class="col-type">Balance</td>
+                        <td v-for="date in datesInCurrentMonth" :key="date+'_b'" :class="getBalanceClass(getData(partNo, date))">
+                            {{ calculateBalance(getData(partNo, date)) }}
+                        </td>
+                    </tr>
+                </template>
+            </tbody>
+        </table>
+        <div v-if="filteredParts.length === 0" class="p-5 text-center text-muted">本月無排程資料</div>
+    </div>
+</div>
+
+<script>
+    const { createApp, ref, computed, onMounted } = Vue;
+
+    createApp({
+        setup() {
+            const rawData = ref([]); 
+            const dataMap = ref({});
+            const currentMonth = ref('');
+            const monthList = ref([]);
+            const searchKeyword = ref('');
+
+            // --- Mock Data ---
+            onMounted(() => {
+                const parts = ['PN-A100', 'PN-B200', 'PN-C300'];
+                const today = new Date();
+                const list = [];
+                const map = {};
+                const months = new Set();
+
+                // 生成 5 個月的資料
+                for (let i = 0; i < 150; i++) {
+                    const d = new Date(today);
+                    d.setDate(today.getDate() + i);
+                    const dateStr = d.toISOString().split('T')[0];
+                    const monthStr = dateStr.slice(0, 7);
+                    months.add(monthStr);
+
+                    parts.forEach(p => {
+                        const planned = Math.floor(Math.random() * 100);
+                        const item = {
+                            id: `${p}_${dateStr}`,
+                            date: dateStr,
+                            month: monthStr,
+                            partNo: p,
+                            plannedQty: planned,
+                            confirmedQty: planned, // 預設一致
+                        };
+                        list.push(item);
+                        map[item.id] = item;
+                    });
+                }
+                rawData.value = list;
+                dataMap.value = map;
+                monthList.value = Array.from(months).sort();
+                currentMonth.value = monthList.value[0];
+            });
+
+            // --- Helper Functions ---
+            const getData = (part, date) => dataMap.value[`${part}_${date}`] || { plannedQty:0, confirmedQty:0 };
+            const calculateBalance = (item) => item.id ? (item.plannedQty - item.confirmedQty) : '-';
+            const getBalanceClass = (item) => item.id && (item.plannedQty - item.confirmedQty !== 0) ? 'bg-diff' : 'bg-ok';
+            const formatDateShort = (d) => d.substring(5);
+
+            // 取得目前 Tab 的日期
+            const datesInCurrentMonth = computed(() => {
+                const dates = new Set();
+                rawData.value.forEach(d => d.month === currentMonth.value && dates.add(d.date));
+                return Array.from(dates).sort();
+            });
+
+            // 取得目前 Tab 的料號
+            const filteredParts = computed(() => {
+                const parts = new Set();
+                const k = searchKeyword.value.toLowerCase();
+                rawData.value.forEach(d => {
+                    if (d.month === currentMonth.value && (!k || d.partNo.toLowerCase().includes(k))) {
+                        parts.add(d.partNo);
+                    }
+                });
+                return Array.from(parts).sort();
+            });
+
+            // ==========================================
+            // ★ 功能 1：匯出所有月份 (含 Balance)
+            // ==========================================
+            const exportToExcel = () => {
+                const wb = XLSX.utils.book_new();
+
+                // 遍歷所有月份 (Tabs)
+                monthList.value.forEach(month => {
+                    // 1. 準備該月份的資料
+                    const monthDates = new Set();
+                    const monthParts = new Set();
+                    
+                    rawData.value.forEach(d => {
+                        if (d.month === month) {
+                            monthDates.add(d.date);
+                            // 如果有搜尋關鍵字，匯出時也只匯出符合的料號 (可選)
+                            if (!searchKeyword.value || d.partNo.toLowerCase().includes(searchKeyword.value.toLowerCase())) {
+                                monthParts.add(d.partNo);
+                            }
+                        }
+                    });
+
+                    const datesArr = Array.from(monthDates).sort();
+                    const partsArr = Array.from(monthParts).sort();
+
+                    if (datesArr.length === 0) return; // 空月份跳過
+
+                    // 2. 建構 Header
+                    const rows = [];
+                    rows.push(["料號", "項目", ...datesArr]);
+
+                    // 3. 建構內容 (Plan, Confirmed, Balance)
+                    partsArr.forEach(part => {
+                        const rowPlan = [part, "計畫出貨"];
+                        const rowConf = [part, "確認出貨"]; // 這是使用者要在 Excel 填的
+                        const rowBal  = [part, "Balance"];  // 這是給使用者參考的
+
+                        datesArr.forEach(date => {
+                            const item = dataMap.value[`${part}_${date}`] || { plannedQty:0, confirmedQty:0 };
+                            
+                            rowPlan.push(item.plannedQty);
+                            rowConf.push(item.confirmedQty);
+                            
+                            // 計算 Balance 寫入 Excel (注意：這是靜態值，在 Excel 修改確認數不會自動連動 Balance)
+                            rowBal.push(item.plannedQty - item.confirmedQty);
+                        });
+
+                        rows.push(rowPlan);
+                        rows.push(rowConf);
+                        rows.push(rowBal); // 將 Balance 加進去
+                        // rows.push([]); // 空行分隔
+                    });
+
+                    // 4. 建立 Worksheet 並加入 Workbook
+                    const ws = XLSX.utils.aoa_to_sheet(rows);
+                    
+                    // 設定欄寬
+                    const wscols = [{wch:15}, {wch:12}];
+                    datesArr.forEach(() => wscols.push({wch:9}));
+                    ws['!cols'] = wscols;
+
+                    XLSX.utils.book_append_sheet(wb, ws, month);
+                });
+
+                XLSX.writeFile(wb, "供應商排程_All_Months.xlsx");
+            };
+
+            // ==========================================
+            // ★ 功能 2：上傳讀取所有月份 (忽略 Balance)
+            // ==========================================
+            const handleFileUpload = (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        
+                        let totalUpdated = 0;
+
+                        // 遍歷 Excel 裡的所有 Sheets
+                        workbook.SheetNames.forEach(sheetName => {
+                            const worksheet = workbook.Sheets[sheetName];
+                            const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+                            jsonData.forEach(row => {
+                                // ★ 關鍵：只讀取「確認出貨」的列
+                                // 忽略「計畫出貨」和「Balance」
+                                if (row["項目"] === "確認出貨") {
+                                    const partNo = row["料號"];
+                                    if (!partNo) return;
+
+                                    Object.keys(row).forEach(key => {
+                                        // 檢查 Key 是否為日期格式 (YYYY-MM-DD)
+                                        if (key.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                                            const dateKey = key;
+                                            const newQty = Number(row[key]);
+                                            
+                                            // 更新資料
+                                            const dataKey = `${partNo}_${dateKey}`;
+                                            const item = dataMap.value[dataKey];
+                                            
+                                            if (item && !isNaN(newQty)) {
+                                                if (item.confirmedQty !== newQty) {
+                                                    item.confirmedQty = newQty;
+                                                    totalUpdated++;
+                                                }
+                                            }
+                                        }
+                                    });
+                                }
+                            });
+                        });
+
+                        if (totalUpdated > 0) {
+                            alert(`上傳成功！共更新了 ${totalUpdated} 筆資料 (跨月份)。`);
+                        } else {
+                            alert("上傳成功，但資料無變更，或格式不符。");
+                        }
+                        
+                        event.target.value = ''; // 重置 Input
+
+                    } catch (err) {
+                        console.error(err);
+                        alert("解析失敗，請確認檔案格式。");
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            };
+
+            return {
+                currentMonth, monthList, searchKeyword,
+                datesInCurrentMonth, filteredParts,
+                getData, calculateBalance, getBalanceClass, formatDateShort,
+                exportToExcel, handleFileUpload
+            };
+        }
+    }).mount('#app');
+</script>
+
+</body>
+</html>

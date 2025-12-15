@@ -1,0 +1,49 @@
+@model IEnumerable<MoldManagerMvc.Models.MoldLog>
+@{
+    ViewData["Title"] = "歷程記錄";
+}
+
+<div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+    <div class="p-4 border-b border-gray-100 bg-gray-50">
+        <h3 class="font-semibold text-gray-700">系統操作紀錄</h3>
+    </div>
+    <ul class="divide-y divide-gray-100">
+        @foreach (var log in Model)
+        {
+            string badgeClass = log.Action switch {
+                "create" => "bg-green-100 text-green-600",
+                "checkout" => "bg-blue-100 text-blue-600",
+                "return" => "bg-indigo-100 text-indigo-600",
+                "maintenance" => "bg-orange-100 text-orange-600",
+                _ => "bg-gray-100 text-gray-600"
+            };
+            string actionText = log.Action switch {
+                "create" => "建立資料",
+                "checkout" => "領用出庫",
+                "return" => "歸還入庫",
+                "maintenance" => "保養維修",
+                "delete" => "刪除資料",
+                _ => log.Action
+            };
+
+            <li class="p-4 hover:bg-gray-50">
+                <div class="flex items-start justify-between">
+                    <div class="flex gap-3">
+                        <span class="px-2 py-1 rounded text-xs font-bold h-fit @badgeClass">
+                            @actionText
+                        </span>
+                        <div>
+                            <p class="font-medium text-gray-800">@log.MoldId</p>
+                            <p class="text-sm text-gray-500">
+                                @if (log.Action == "checkout") { <span>領用人: @log.Operator / 機台: @log.Machine</span> }
+                                @if (log.Action == "return") { <span>本次生產: @log.ShotsAdded 模 / @log.Note</span> }
+                                @if (log.Action != "checkout" && log.Action != "return") { <span>@log.Note</span> }
+                            </p>
+                        </div>
+                    </div>
+                    <span class="text-xs text-gray-400 whitespace-nowrap">@log.Timestamp.ToString("yyyy/MM/dd HH:mm")</span>
+                </div>
+            </li>
+        }
+    </ul>
+</div>

@@ -1,0 +1,198 @@
+@model IEnumerable<MoldManagerMvc.Models.Mold>
+@{
+    ViewData["Title"] = "總覽";
+    // 計算統計數據 (也可以用 ViewBag 傳遞)
+    var total = ViewBag.Total;
+    var available = ViewBag.Available;
+    var inUse = ViewBag.InUse;
+    var maintenance = ViewBag.Maintenance;
+}
+
+<!-- Dashboard Cards -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+    <div class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-blue-500">
+        <p class="text-gray-500 text-sm font-medium">資產總數</p>
+        <h2 class="text-3xl font-bold text-gray-800">@total</h2>
+    </div>
+    <div class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-green-500">
+        <p class="text-gray-500 text-sm font-medium">在庫可用</p>
+        <h2 class="text-3xl font-bold text-gray-800">@available</h2>
+    </div>
+    <div class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-indigo-500">
+        <p class="text-gray-500 text-sm font-medium">生產使用中</p>
+        <h2 class="text-3xl font-bold text-gray-800">@inUse</h2>
+    </div>
+    <div class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-orange-500">
+        <p class="text-gray-500 text-sm font-medium">保養/維修中</p>
+        <h2 class="text-3xl font-bold text-gray-800">@maintenance</h2>
+    </div>
+</div>
+
+<!-- Main List & Actions Area -->
+<!-- x-data 定義 Alpine.js 的狀態，用於控制 Modal -->
+<div x-data="{ 
+    modalOpen: false, 
+    modalType: '', 
+    selectedId: '', 
+    selectedName: '',
+    openModal(type, id, name) { 
+        this.modalType = type; 
+        this.selectedId = id; 
+        this.selectedName = name; 
+        this.modalOpen = true; 
+    } 
+}">
+
+    <!-- Search & Add Bar -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mb-6">
+        <div class="p-4 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+            <form method="get" action="/" class="relative w-full md:w-64">
+                <input type="text" name="searchTerm" placeholder="搜尋型號、編號..." 
+                       class="pl-4 pr-4 py-2 w-full border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                       value="@Context.Request.Query["searchTerm"]" />
+                <button type="submit" class="absolute right-2 top-2 text-gray-400 hover:text-blue-500">🔍</button>
+            </form>
+            <button @@click="openModal('create', '', '')" 
+                    class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition flex items-center gap-2">
+                <span>+</span> 新增模具
+            </button>
+        </div>
+
+        <!-- Table -->
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm text-gray-600">
+                <thead class="bg-gray-50 text-gray-800 font-semibold uppercase tracking-wider">
+                    <tr>
+                        <th class="px-6 py-4">資產編號 (ID)</th>
+                        <th class="px-6 py-4">型號 / 名稱</th>
+                        <th class="px-6 py-4">狀態 / 位置</th>
+                        <th class="px-6 py-4">使用次數 (壽命管理)</th>
+                        <th class="px-6 py-4 text-right">操作</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    @foreach (var item in Model)
+                    {
+                        double percentage = (double)item.CurrentShots / item.MaxShots * 100;
+                        if (percentage > 100) percentage = 100;
+                        string barColor = percentage >= 90 ? "bg-red-500" : (percentage >= 75 ? "bg-orange-400" : "bg-green-500");
+
+                        <tr class="hover:bg-gray-50 transition">
+                            <td class="px-6 py-4 font-medium text-gray-900">@item.Id</td>
+                            <td class="px-6 py-4">
+                                <div class="text-xs text-gray-500">@item.Model</div>
+                                <div class="font-medium">@item.Name</div>
+                                @if(!string.IsNullOrEmpty(item.Operator)) {
+                                    <div class="text-xs text-blue-600 mt-1">操作員: @item.Operator</div>
+                                }
+                            </td>
+                            <td class="px-6 py-4">
+                                @if (item.Status == "in-use") {
+                                    <div class="flex flex-col items-start gap-1">
+                                        <span class="px-2 py-1 text-xs font-semibold rounded-full border bg-blue-100 text-blue-800 border-blue-200">生產中</span>
+                                        <div class="font-bold text-blue-700">機台: @item.Machine</div>
+                                    </div>
+                                } else if (item.Status == "available") {
+                                    <div class="flex flex-col items-start gap-1">
+                                        <span class="px-2 py-1 text-xs font-semibold rounded-full border bg-green-100 text-green-800 border-green-200">在庫可用</span>
+                                        <div class="text-gray-500">在庫房</div>
+                                    </div>
+                                } else {
+                                    <span class="px-2 py-1 text-xs font-semibold rounded-full border bg-orange-100 text-orange-800 border-orange-200">維修/保養中</span>
+                                }
+                            </td>
+                            <td class="px-6 py-4 w-64">
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span class="font-medium">@item.CurrentShots.ToString("N0") 模</span>
+                                    <span class="text-gray-400">/ @item.MaxShots.ToString("N0")</span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                                    <div class="h-full rounded-full @barColor" style="width: @percentage%"></div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 text-right">
+                                <div class="flex justify-end gap-2">
+                                    @if (item.Status == "available") {
+                                        <button @@click="openModal('checkout', '@item.Id', '@item.Name')" class="text-blue-600 hover:bg-blue-50 border border-blue-200 px-2 py-1 rounded text-xs">領用</button>
+                                    }
+                                    @if (item.Status == "in-use") {
+                                        <button @@click="openModal('return', '@item.Id', '@item.Name')" class="text-green-600 hover:bg-green-50 border border-green-200 px-2 py-1 rounded text-xs">歸還</button>
+                                    }
+                                    @if (item.Status == "maintenance") {
+                                        <form method="post" action="/Mold/Maintain" class="inline">
+                                            <input type="hidden" name="id" value="@item.Id" />
+                                            <button type="submit" class="text-orange-600 hover:bg-orange-50 border border-orange-200 px-2 py-1 rounded text-xs">完修</button>
+                                        </form>
+                                    }
+                                    <form method="post" action="/Mold/Delete" class="inline" onsubmit="return confirm('確定刪除?');">
+                                        <input type="hidden" name="id" value="@item.Id" />
+                                        <button class="text-gray-400 hover:text-red-500 px-2 py-1">刪除</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Universal Modal -->
+    <div x-show="modalOpen" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" style="display: none;">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden p-6" @@click.away="modalOpen = false">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-gray-800" x-text="modalType === 'create' ? '新增模具' : (modalType === 'checkout' ? '領用模具' : '歸還模具')"></h3>
+                <button @@click="modalOpen = false" class="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+
+            <!-- Create Form -->
+            <form x-show="modalType === 'create'" method="post" action="/Mold/Create" class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">模具型號</label>
+                        <input required name="model" class="w-full border rounded p-2" placeholder="M-2023-001">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">後綴</label>
+                        <input required name="assetSuffix" class="w-full border rounded p-2" placeholder="A">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">名稱</label>
+                    <input required name="name" class="w-full border rounded p-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">最大壽命</label>
+                    <input required type="number" name="maxShots" class="w-full border rounded p-2" value="300000">
+                </div>
+                <button class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">儲存</button>
+            </form>
+
+            <!-- Checkout Form -->
+            <form x-show="modalType === 'checkout'" method="post" action="/Mold/Checkout" class="space-y-4">
+                <input type="hidden" name="id" x-model="selectedId">
+                <p class="text-sm text-gray-600">正在領用: <span x-text="selectedId"></span></p>
+                <div>
+                    <label class="block text-sm font-medium mb-1">領用人員</label>
+                    <input required name="operatorName" class="w-full border rounded p-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">機台編號</label>
+                    <input required name="machine" class="w-full border rounded p-2">
+                </div>
+                <button class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">確認領用</button>
+            </form>
+
+            <!-- Return Form -->
+            <form x-show="modalType === 'return'" method="post" action="/Mold/Return" class="space-y-4">
+                <input type="hidden" name="id" x-model="selectedId">
+                <p class="text-sm text-gray-600">正在歸還: <span x-text="selectedId"></span></p>
+                <div>
+                    <label class="block text-sm font-medium mb-1">本次生產模數</label>
+                    <input required type="number" name="shotsAdded" class="w-full border rounded p-2">
+                </div>
+                <button class="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700">確認歸還</button>
+            </form>
+        </div>
+    </div>
+</div>
