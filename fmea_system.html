@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FMEA 管理系統 - DFMEA/PFMEA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        .rpn-high { background-color: #fee2e2; color: #991b1b; font-weight: bold; }
+        .rpn-mid { background-color: #fef9c3; color: #854d0e; }
+        .rpn-low { background-color: #f0fdf4; color: #166534; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<div id="app" class="container mx-auto px-4 py-8">
+    <div class="flex flex-col md:flex-row justify-between items-center mb-8 bg-white p-6 rounded-lg shadow-sm">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">FMEA 資料管理系統</h1>
+            <p class="text-gray-500 text-sm">支援 DFMEA 與 PFMEA 的自動化 RPN 計算與 Excel 匯出</p>
+        </div>
+        <div class="flex space-x-4 mt-4 md:mt-0">
+            <label class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition">
+                上傳 Excel
+                <input type="file" class="hidden" @change="handleUpload" accept=".xlsx, .xls">
+            </label>
+            <button @click="downloadExcel" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition">
+                下載 Excel
+            </button>
+            <button @click="clearData" class="text-red-500 hover:text-red-700 text-sm">清除資料</button>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 text-center">
+        <div class="bg-white p-4 rounded-lg shadow-sm border-l-4 border-blue-500">
+            <p class="text-gray-500 text-sm">總項目數</p>
+            <p class="text-2xl font-bold">{{ fmeaList.length }}</p>
+        </div>
+        <div class="bg-white p-4 rounded-lg shadow-sm border-l-4 border-red-500">
+            <p class="text-gray-500 text-sm">高風險項目 (RPN > 100)</p>
+            <p class="text-2xl font-bold text-red-600">{{ highRiskCount }}</p>
+        </div>
+        <div class="bg-white p-4 rounded-lg shadow-sm border-l-4 border-green-500">
+            <p class="text-gray-500 text-sm">目前類型</p>
+            <p class="text-2xl font-bold text-green-600">{{ currentType }}</p>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead class="bg-gray-100 border-b text-gray-700">
+                    <tr>
+                        <th class="p-3 text-sm">功能 / 程序</th>
+                        <th class="p-3 text-sm">失效模式</th>
+                        <th class="p-3 text-sm w-20">嚴重度(S)</th>
+                        <th class="p-3 text-sm w-20">發生度(O)</th>
+                        <th class="p-3 text-sm w-20">偵測度(D)</th>
+                        <th class="p-3 text-sm w-24">RPN</th>
+                        <th class="p-3 text-sm">建議措施</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="(item, index) in fmeaList" :key="index" class="border-b hover:bg-gray-50">
+                        <td class="p-3 text-sm"><input v-model="item.Function" class="w-full bg-transparent outline-none"></td>
+                        <td class="p-3 text-sm"><input v-model="item.FailureMode" class="w-full bg-transparent outline-none"></td>
+                        <td class="p-3">
+                            <input type="number" v-model.number="item.S" @input="updateRP(item)" min="1" max="10" class="w-12 border rounded px-1">
+                        </td>
+                        <td class="p-3">
+                            <input type="number" v-model.number="item.O" @input="updateRP(item)" min="1" max="10" class="w-12 border rounded px-1">
+                        </td>
+                        <td class="p-3">
+                            <input type="number" v-model.number="item.D" @input="updateRP(item)" min="1" max="10" class="w-12 border rounded px-1">
+                        </td>
+                        <td class="p-3" :class="getRPNClass(item.RPN)">
+                            {{ item.RPN }}
+                        </td>
+                        <td class="p-3 text-sm">
+                            <input v-model="item.Action" class="w-full bg-transparent outline-none" placeholder="輸入改善措施...">
+                        </td>
+                    </tr>
+                    <tr v-if="fmeaList.length === 0">
+                        <td colspan="7" class="p-8 text-center text-gray-400">尚未上傳資料，請點擊上方按鈕上傳 Excel 檔案</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="mt-4 flex justify-end">
+        <button @click="addRow" class="text-blue-600 hover:underline text-sm font-medium">+ 新增一行</button>
+    </div>
+</div>
+
+<script>
+    const { createApp, ref, computed } = Vue;
+
+    createApp({
+        setup() {
+            const fmeaList = ref([
+                { Function: '範例程序', FailureMode: '範例失效', S: 8, O: 5, D: 3, RPN: 120, Action: '需增加檢驗站' }
+            ]);
+            const currentType = ref('DFMEA / PFMEA');
+
+            // 計算高風險數量
+            const highRiskCount = computed(() => {
+                return fmeaList.value.filter(item => item.RPN >= 100).length;
+            });
+
+            // 處理上傳
+            const handleUpload = (event) => {
+                const file = event.target.files[0];
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const json = XLSX.utils.sheet_to_json(sheet);
+                    
+                    // 格式化數據
+                    fmeaList.value = json.map(row => {
+                        const s = row['S'] || row['嚴重度'] || 0;
+                        const o = row['O'] || row['發生度'] || 0;
+                        const d = row['D'] || row['偵測度'] || 0;
+                        return {
+                            Function: row['Function'] || row['功能'] || '',
+                            FailureMode: row['FailureMode'] || row['失效模式'] || '',
+                            S: s, O: o, D: d,
+                            RPN: s * o * d,
+                            Action: row['Action'] || row['建議措施'] || ''
+                        };
+                    });
+                };
+                reader.readAsArrayBuffer(file);
+            };
+
+            // 下載 Excel
+            const downloadExcel = () => {
+                const ws = XLSX.utils.json_to_sheet(fmeaList.value);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "FMEA Report");
+                XLSX.writeFile(wb, "FMEA_Export_" + new Date().getTime() + ".xlsx");
+            };
+
+            // 動態更新 RPN
+            const updateRP = (item) => {
+                item.RPN = (item.S || 0) * (item.O || 0) * (item.D || 0);
+            };
+
+            const getRPNClass = (rpn) => {
+                if (rpn >= 100) return 'rpn-high';
+                if (rpn >= 40) return 'rpn-mid';
+                return 'rpn-low';
+            };
+
+            const addRow = () => {
+                fmeaList.value.push({ Function: '', FailureMode: '', S: 1, O: 1, D: 1, RPN: 1, Action: '' });
+            };
+
+            const clearData = () => {
+                if(confirm('確定要清除所有資料嗎？')) fmeaList.value = [];
+            };
+
+            return {
+                fmeaList, currentType, handleUpload, downloadExcel, 
+                updateRP, getRPNClass, highRiskCount, addRow, clearData
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>

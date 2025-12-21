@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FMEA 管理系統 - 附帕累托分析</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .rpn-high { background-color: #fee2e2; color: #991b1b; font-weight: bold; }
+        .rpn-mid { background-color: #fef9c3; color: #854d0e; }
+        .rpn-low { background-color: #f0fdf4; color: #166534; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+<div id="app" class="container mx-auto px-4 py-8">
+    <div class="flex justify-between items-center mb-6 bg-white p-6 rounded-xl shadow-md">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-800">FMEA 數位化管理看板</h1>
+            <p class="text-slate-500">自動化 RPN 分析與帕累托風險決策</p>
+        </div>
+        <div class="flex gap-3">
+            <label class="cursor-pointer bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg shadow transition">
+                上傳 Excel
+                <input type="file" class="hidden" @change="handleUpload" accept=".xlsx, .xls">
+            </label>
+            <button @click="downloadExcel" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-lg shadow transition">
+                導出報告
+            </button>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-md">
+            <h2 class="text-lg font-semibold mb-4 text-slate-700">RPN 帕累托分析圖 (Pareto Analysis)</h2>
+            <div style="height: 300px;">
+                <canvas id="paretoChart"></canvas>
+            </div>
+        </div>
+        <div class="bg-white p-6 rounded-xl shadow-md">
+            <h2 class="text-lg font-semibold mb-4 text-slate-700">風險統計摘要</h2>
+            <div class="space-y-4">
+                <div class="flex justify-between border-b pb-2">
+                    <span class="text-slate-500">總分析項：</span>
+                    <span class="font-bold">{{ fmeaList.length }}</span>
+                </div>
+                <div class="flex justify-between border-b pb-2">
+                    <span class="text-slate-500">高風險 (RPN≥100)：</span>
+                    <span class="font-bold text-red-600">{{ highRiskCount }}</span>
+                </div>
+                <div class="mt-4 p-3 bg-amber-50 rounded-lg text-sm text-amber-800 border border-amber-200">
+                    <strong>決策建議：</strong><br>
+                    請優先處理左側累積影響度達 80% 的前幾個失效模式（關鍵少數）。
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-md overflow-hidden">
+        <table class="w-full text-left border-collapse text-sm">
+            <thead class="bg-slate-50 border-b text-slate-600">
+                <tr>
+                    <th class="p-4 font-semibold uppercase">功能/程序</th>
+                    <th class="p-4 font-semibold uppercase">潛在失效模式</th>
+                    <th class="p-4 font-semibold text-center w-20">S</th>
+                    <th class="p-4 font-semibold text-center w-20">O</th>
+                    <th class="p-4 font-semibold text-center w-20">D</th>
+                    <th class="p-4 font-semibold text-center w-24">RPN</th>
+                    <th class="p-4 font-semibold">建議改善措施</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="(item, index) in fmeaList" :key="index" class="border-b hover:bg-slate-50 transition">
+                    <td class="p-4"><input v-model="item.Function" class="w-full bg-transparent border-none focus:ring-2 focus:ring-indigo-200 rounded"></td>
+                    <td class="p-4 font-medium text-slate-700"><input v-model="item.FailureMode" class="w-full bg-transparent border-none"></td>
+                    <td class="p-4 text-center">
+                        <input type="number" v-model.number="item.S" @input="updateData" min="1" max="10" class="w-12 text-center border rounded">
+                    </td>
+                    <td class="p-4 text-center">
+                        <input type="number" v-model.number="item.O" @input="updateData" min="1" max="10" class="w-12 text-center border rounded">
+                    </td>
+                    <td class="p-4 text-center">
+                        <input type="number" v-model.number="item.D" @input="updateData" min="1" max="10" class="w-12 text-center border rounded">
+                    </td>
+                    <td class="p-4 text-center" :class="getRPNClass(item.RPN)">
+                        {{ item.RPN }}
+                    </td>
+                    <td class="p-4"><input v-model="item.Action" class="w-full border-b border-transparent focus:border-indigo-400 outline-none" placeholder="輸入對策..."></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const { createApp, ref, computed, onMounted, nextTick } = Vue;
+
+    createApp({
+        setup() {
+            const fmeaList = ref([
+                { Function: '主軸馬達', FailureMode: '軸承過熱', S: 8, O: 6, D: 4, RPN: 192, Action: '增加冷卻系統' },
+                { Function: '齒輪箱', FailureMode: '漏油', S: 5, O: 4, D: 3, RPN: 60, Action: '更換油封材質' },
+                { Function: '控制面板', FailureMode: '按鍵失靈', S: 3, O: 2, D: 2, RPN: 12, Action: '定期清潔' },
+                { Function: '電源供應', FailureMode: '電壓不穩', S: 7, O: 3, D: 5, RPN: 105, Action: '安裝穩壓器' }
+            ]);
+
+            let chartInstance = null;
+
+            const highRiskCount = computed(() => fmeaList.value.filter(i => i.RPN >= 100).length);
+
+            const updateData = () => {
+                fmeaList.value.forEach(item => {
+                    item.RPN = (item.S || 0) * (item.O || 0) * (item.D || 0);
+                });
+                renderChart();
+            };
+
+            const renderChart = () => {
+                const sortedData = [...fmeaList.value].sort((a, b) => b.RPN - a.RPN);
+                const labels = sortedData.map(i => i.FailureMode);
+                const rpnValues = sortedData.map(i => i.RPN);
+                
+                const totalRPN = rpnValues.reduce((a, b) => a + b, 0);
+                let cumulativeSum = 0;
+                const cumulativePercentages = rpnValues.map(v => {
+                    cumulativeSum += v;
+                    return ((cumulativeSum / totalRPN) * 100).toFixed(1);
+                });
+
+                const ctx = document.getElementById('paretoChart').getContext('2d');
+                if (chartInstance) chartInstance.destroy();
+
+                chartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'RPN 分數',
+                                data: rpnValues,
+                                backgroundColor: 'rgba(79, 70, 229, 0.7)',
+                                yAxisID: 'y',
+                            },
+                            {
+                                label: '累積百分比 (%)',
+                                data: cumulativePercentages,
+                                type: 'line',
+                                borderColor: '#ef4444',
+                                backgroundColor: '#ef4444',
+                                borderWidth: 2,
+                                pointRadius: 4,
+                                yAxisID: 'y1',
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: { beginAtZero: true, title: { display: true, text: 'RPN 值' } },
+                            y1: { position: 'right', max: 100, beginAtZero: true, title: { display: true, text: '累積 %' }, grid: { drawOnChartArea: false } }
+                        }
+                    }
+                });
+            };
+
+            const handleUpload = (event) => {
+                const file = event.target.files[0];
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                    fmeaList.value = json.map(row => {
+                        const s = row['S'] || row['嚴重度'] || 0;
+                        const o = row['O'] || row['發生度'] || 0;
+                        const d = row['D'] || row['偵測度'] || 0;
+                        return {
+                            Function: row['Function'] || row['功能'] || '',
+                            FailureMode: row['FailureMode'] || row['失效模式'] || '',
+                            S: s, O: o, D: d, RPN: s * o * d,
+                            Action: row['Action'] || row['建議措施'] || ''
+                        };
+                    });
+                    renderChart();
+                };
+                reader.readAsArrayBuffer(file);
+            };
+
+            const downloadExcel = () => {
+                const ws = XLSX.utils.json_to_sheet(fmeaList.value);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "FMEA Analysis");
+                XLSX.writeFile(wb, "FMEA_Pareto_Report.xlsx");
+            };
+
+            const getRPNClass = (rpn) => rpn >= 100 ? 'rpn-high' : (rpn >= 40 ? 'rpn-mid' : 'rpn-low');
+
+            onMounted(() => renderChart());
+
+            return { fmeaList, highRiskCount, updateData, handleUpload, downloadExcel, getRPNClass };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>

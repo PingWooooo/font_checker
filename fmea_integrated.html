@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FMEA 整合管理系統 - D/P 對比分析</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .tab-active { border-bottom: 3px solid #4f46e5; color: #4f46e5; font-weight: bold; }
+        .rpn-high { background-color: #fee2e2; color: #991b1b; }
+        .type-d { background-color: #e0f2fe; color: #0369a1; padding: 2px 6px; rounded: 4px; font-size: 10px; }
+        .type-p { background-color: #fef3c7; color: #92400e; padding: 2px 6px; rounded: 4px; font-size: 10px; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans">
+
+<div id="app" class="container mx-auto px-4 py-6">
+    <div class="flex flex-col md:flex-row justify-between items-center mb-6 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+        <div>
+            <h1 class="text-2xl font-black text-slate-800 tracking-tight">FMEA 整合決策看板</h1>
+            <p class="text-slate-500 text-sm">Design (D) vs Process (P) 綜合風險評估系統</p>
+        </div>
+        <div class="flex gap-3 mt-4 md:mt-0">
+            <label class="cursor-pointer bg-slate-800 hover:bg-black text-white px-5 py-2 rounded-xl text-sm transition shadow-lg shadow-slate-200">
+                導入數據 (Excel)
+                <input type="file" class="hidden" @change="handleUpload" accept=".xlsx, .xls">
+            </label>
+            <button @click="downloadExcel" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl text-sm transition shadow-lg shadow-indigo-100">
+                導出整合報告
+            </button>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <h3 class="text-sm font-bold text-slate-400 uppercase mb-4 tracking-wider">關鍵風險排序 (Pareto)</h3>
+            <div style="height: 280px;"><canvas id="paretoChart"></canvas></div>
+        </div>
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <h3 class="text-sm font-bold text-slate-400 uppercase mb-4 tracking-wider">DFMEA vs PFMEA 對比分析</h3>
+            <div style="height: 280px;"><canvas id="compareChart"></canvas></div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="flex border-b bg-slate-50/50">
+            <button v-for="t in ['全部資料', 'DFMEA', 'PFMEA']" 
+                    @click="activeTab = t" 
+                    :class="['px-8 py-4 text-sm transition', activeTab === t ? 'tab-active bg-white' : 'text-slate-500 hover:text-slate-700']">
+                {{ t }}
+            </button>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="text-slate-400 text-[11px] uppercase tracking-widest border-b">
+                        <th class="p-4 font-semibold">類型</th>
+                        <th class="p-4 font-semibold">功能 / 程序</th>
+                        <th class="p-4 font-semibold text-center">S</th>
+                        <th class="p-4 font-semibold text-center">O</th>
+                        <th class="p-4 font-semibold text-center">D</th>
+                        <th class="p-4 font-semibold text-center">RPN</th>
+                        <th class="p-4 font-semibold">建議措施 (Action Plan)</th>
+                    </tr>
+                </thead>
+                <tbody class="text-sm">
+                    <tr v-for="(item, index) in filteredList" :key="index" class="border-b last:border-0 hover:bg-slate-50/80 transition">
+                        <td class="p-4">
+                            <span :class="item.Type === 'DFMEA' ? 'type-d' : 'type-p'">{{ item.Type }}</span>
+                        </td>
+                        <td class="p-4">
+                            <div class="font-bold text-slate-700">{{ item.Function }}</div>
+                            <div class="text-xs text-slate-400">{{ item.FailureMode }}</div>
+                        </td>
+                        <td class="p-4 text-center"><input type="number" v-model.number="item.S" @input="updateData" class="w-10 text-center bg-transparent"></td>
+                        <td class="p-4 text-center"><input type="number" v-model.number="item.O" @input="updateData" class="w-10 text-center bg-transparent"></td>
+                        <td class="p-4 text-center"><input type="number" v-model.number="item.D" @input="updateData" class="w-10 text-center bg-transparent"></td>
+                        <td class="p-4 text-center font-black" :class="item.RPN >= 100 ? 'text-red-600' : 'text-slate-700'">{{ item.RPN }}</td>
+                        <td class="p-4">
+                            <input v-model="item.Action" class="w-full bg-transparent border-b border-dashed border-slate-200 focus:border-indigo-500 outline-none py-1" placeholder="點擊輸入措施...">
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    const { createApp, ref, computed, onMounted } = Vue;
+
+    createApp({
+        setup() {
+            const fmeaList = ref([
+                { Type: 'DFMEA', Function: '電池外殼', FailureMode: '結構裂痕', S: 9, O: 2, D: 3, RPN: 54, Action: '增加加強肋' },
+                { Type: 'PFMEA', Function: '外殼組裝', FailureMode: '鎖附扭力不足', S: 8, O: 5, D: 4, RPN: 160, Action: '導入自動扭力槍' },
+                { Type: 'DFMEA', Function: '控制電路', FailureMode: '短路風險', S: 10, O: 1, D: 2, RPN: 20, Action: '增加絕緣層' },
+                { Type: 'PFMEA', Function: '焊線製程', FailureMode: '冷焊', S: 7, O: 6, D: 3, RPN: 126, Action: '優化參數' }
+            ]);
+
+            const activeTab = ref('全部資料');
+            let paretoChart = null;
+            let compareChart = null;
+
+            const filteredList = computed(() => {
+                if (activeTab.value === '全部資料') return fmeaList.value;
+                return fmeaList.value.filter(i => i.Type === activeTab.value);
+            });
+
+            const updateData = () => {
+                fmeaList.value.forEach(i => i.RPN = i.S * i.O * i.D);
+                renderCharts();
+            };
+
+            const renderCharts = () => {
+                // 1. Pareto Chart
+                const sorted = [...filteredList.value].sort((a, b) => b.RPN - a.RPN);
+                const ctxP = document.getElementById('paretoChart').getContext('2d');
+                if (paretoChart) paretoChart.destroy();
+                paretoChart = new Chart(ctxP, {
+                    type: 'bar',
+                    data: {
+                        labels: sorted.map(i => i.FailureMode),
+                        datasets: [{ label: 'RPN', data: sorted.map(i => i.RPN), backgroundColor: '#4f46e5' }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+
+                // 2. Comparison Chart (D vs P)
+                const dData = fmeaList.value.filter(i => i.Type === 'DFMEA');
+                const pData = fmeaList.value.filter(i => i.Type === 'PFMEA');
+                const ctxC = document.getElementById('compareChart').getContext('2d');
+                if (compareChart) compareChart.destroy();
+                compareChart = new Chart(ctxC, {
+                    type: 'bar',
+                    data: {
+                        labels: ['平均 RPN', '高風險項數量 (RPN>100)'],
+                        datasets: [
+                            { 
+                                label: 'DFMEA (設計)', 
+                                data: [
+                                    (dData.reduce((s, i) => s + i.RPN, 0) / dData.length || 0).toFixed(1),
+                                    dData.filter(i => i.RPN >= 100).length
+                                ],
+                                backgroundColor: '#0369a1' 
+                            },
+                            { 
+                                label: 'PFMEA (製程)', 
+                                data: [
+                                    (pData.reduce((s, i) => s + i.RPN, 0) / pData.length || 0).toFixed(1),
+                                    pData.filter(i => i.RPN >= 100).length
+                                ],
+                                backgroundColor: '#f59e0b' 
+                            }
+                        ]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            };
+
+            const handleUpload = (event) => {
+                const file = event.target.files[0];
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                    fmeaList.value = json.map(row => ({
+                        Type: row['Type'] || row['類型'] || 'PFMEA',
+                        Function: row['Function'] || row['功能'] || '',
+                        FailureMode: row['FailureMode'] || row['失效模式'] || '',
+                        S: row['S'] || 0, O: row['O'] || 0, D: row['D'] || 0,
+                        RPN: (row['S'] || 0) * (row['O'] || 0) * (row['D'] || 0),
+                        Action: row['Action'] || row['改善措施'] || ''
+                    }));
+                    renderCharts();
+                };
+                reader.readAsArrayBuffer(file);
+            };
+
+            const downloadExcel = () => {
+                const ws = XLSX.utils.json_to_sheet(fmeaList.value);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Integrated_FMEA");
+                XLSX.writeFile(wb, "Integrated_FMEA_Report.xlsx");
+            };
+
+            onMounted(() => renderCharts());
+
+            return { fmeaList, activeTab, filteredList, updateData, handleUpload, downloadExcel };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
