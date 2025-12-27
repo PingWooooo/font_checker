@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FMEA 系統 - 專業修正版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <style>[x-cloak] { display: none !important; }</style>
+</head>
+<body class="bg-slate-50 text-slate-800" x-data="fmeaManager()">
+
+    <div class="flex h-screen">
+        <aside class="w-64 bg-slate-900 text-white flex flex-col">
+            <div class="p-6 text-xl font-bold text-indigo-400 border-b border-slate-800">FMEA PRO FIX</div>
+            <nav class="flex-1 p-4 space-y-2">
+                <button @click="switchView('dashboard')" :class="view === 'dashboard' ? 'bg-indigo-600 text-white' : 'text-slate-400'" class="w-full text-left p-3 rounded-xl transition">📊 數據儀表板</button>
+                <button @click="switchView('table')" :class="view === 'table' ? 'bg-indigo-600 text-white' : 'text-slate-400'" class="w-full text-left p-3 rounded-xl transition">📋 FMEA 資料表</button>
+            </nav>
+            <div class="p-6 border-t border-slate-800">
+                <p class="text-[10px] text-slate-500 mb-2 uppercase font-bold">上傳範例 Excel</p>
+                <input type="file" @change="uploadExcel" class="text-xs text-slate-400 w-full file:bg-indigo-600 file:text-white file:border-0 file:px-2 file:py-1 file:rounded cursor-pointer">
+            </div>
+        </aside>
+
+        <main class="flex-1 overflow-y-auto p-8" x-cloak>
+            
+            <div x-show="view === 'dashboard'" x-transition>
+                <h1 class="text-3xl font-bold mb-6">品質風險看板</h1>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <p class="text-xs text-slate-400 font-bold uppercase">總筆數</p>
+                        <p class="text-3xl font-bold text-slate-700" x-text="fmeaData.length"></p>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <p class="text-xs text-slate-400 font-bold uppercase text-red-500">高風險項 (RPN > 100)</p>
+                        <p class="text-3xl font-bold text-red-600" x-text="highRiskItems"></p>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <p class="text-xs text-slate-400 font-bold uppercase text-indigo-500">平均 RPN</p>
+                        <p class="text-3xl font-bold text-indigo-600" x-text="avgRPN"></p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border">
+                        <h3 class="font-bold mb-4">Top 10 料號風險排名</h3>
+                        <div class="relative h-[300px]"><canvas id="pnChart"></canvas></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border">
+                        <h3 class="font-bold mb-4">D/P 高風險分佈比</h3>
+                        <div class="relative h-[300px]"><canvas id="dpChart"></canvas></div>
+                    </div>
+                </div>
+            </div>
+
+            <div x-show="view === 'table'" x-transition>
+                <h1 class="text-3xl font-bold mb-6">資料明細</h1>
+                <div class="bg-white rounded-2xl shadow-sm border overflow-hidden">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-50 border-b">
+                            <tr class="text-slate-500">
+                                <th class="p-4">料號</th><th class="p-4">類型</th><th class="p-4">失效模式</th>
+                                <th class="p-4 text-center">S</th><th class="p-4 text-center">O</th><th class="p-4 text-center">D</th>
+                                <th class="p-4 text-center">RPN</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="item in fmeaData" :key="item.id">
+                                <tr class="border-b hover:bg-slate-50">
+                                    <td class="p-4 font-bold text-indigo-600" x-text="item.PartNumber"></td>
+                                    <td class="p-4" x-text="item.Type"></td>
+                                    <td class="p-4" x-text="item.FailureMode"></td>
+                                    <td class="p-4 text-center" x-text="item.S"></td>
+                                    <td class="p-4 text-center" x-text="item.O"></td>
+                                    <td class="p-4 text-center" x-text="item.D"></td>
+                                    <td class="p-4 text-center font-bold" :class="item.S*item.O*item.D >= 100 ? 'text-red-600' : ''" x-text="item.S*item.O*item.D"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function fmeaManager() {
+            return {
+                view: 'dashboard',
+                fmeaData: [],
+                charts: {},
+
+                switchView(newView) {
+                    this.view = newView;
+                    if (newView === 'dashboard') {
+                        // 延遲執行，確保 DOM 已經渲染完成
+                        setTimeout(() => this.renderCharts(), 100);
+                    }
+                },
+
+                get highRiskItems() { return this.fmeaData.filter(i => (i.S * i.O * i.D) >= 100).length; },
+                get avgRPN() {
+                    if (!this.fmeaData.length) return 0;
+                    return (this.fmeaData.reduce((a, b) => a + (b.S * b.O * b.D), 0) / this.fmeaData.length).toFixed(1);
+                },
+
+                uploadExcel(e) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+
+                    const reader = new FileReader();
+                    reader.onload = (evt) => {
+                        const data = new Uint8Array(evt.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                        const json = XLSX.utils.sheet_to_json(worksheet);
+
+                        this.fmeaData = json.map((row, idx) => {
+                            // 強制轉型為數字，避免計算錯誤
+                            const s = parseInt(row['S'] || 0);
+                            const o = parseInt(row['O'] || 0);
+                            const d = parseInt(row['D'] || 0);
+                            return {
+                                id: idx,
+                                PartNumber: String(row['PartNumber'] || row['成品料號'] || 'N/A'),
+                                Type: row['Type'] || row['類型'] || 'PFMEA',
+                                FailureMode: row['FailureMode'] || row['失效模式'] || '',
+                                S: isNaN(s) ? 0 : s,
+                                O: isNaN(o) ? 0 : o,
+                                D: isNaN(d) ? 0 : d
+                            };
+                        });
+
+                        alert(`匯入成功！共 ${this.fmeaData.length} 筆資料`);
+                        this.switchView('dashboard'); // 自動切換並觸發繪圖
+                    };
+                    reader.readAsArrayBuffer(file);
+                },
+
+                renderCharts() {
+                    this.renderPnRanking();
+                    this.renderDpDistribution();
+                },
+
+                renderPnRanking() {
+                    const pnScores = {};
+                    this.fmeaData.forEach(i => {
+                        const rpn = i.S * i.O * i.D;
+                        pnScores[i.PartNumber] = (pnScores[i.PartNumber] || 0) + rpn;
+                    });
+
+                    const labels = Object.keys(pnScores).sort((a,b) => pnScores[b] - pnScores[a]).slice(0, 10);
+                    const values = labels.map(l => pnScores[l]);
+
+                    const ctx = document.getElementById('pnChart');
+                    if (!ctx) return;
+                    if (this.charts.pn) this.charts.pn.destroy();
+                    this.charts.pn = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: labels,
+                            datasets: [{ label: 'RPN 總分', data: values, backgroundColor: '#6366f1' }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false }
+                    });
+                },
+
+                renderDpDistribution() {
+                    const highRiskD = this.fmeaData.filter(i => i.Type === 'DFMEA' && (i.S*i.O*i.D) >= 100).length;
+                    const highRiskP = this.fmeaData.filter(i => i.Type === 'PFMEA' && (i.S*i.O*i.D) >= 100).length;
+
+                    const ctx = document.getElementById('dpChart');
+                    if (!ctx) return;
+                    if (this.charts.dp) this.charts.dp.destroy();
+                    this.charts.dp = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['DFMEA 高風險', 'PFMEA 高風險'],
+                            datasets: [{ data: [highRiskD, highRiskP], backgroundColor: ['#3b82f6', '#f59e0b'] }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false }
+                    });
+                }
+            }
+        }
+    </script>
+</body>
+</html>
