@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FMEA 專家系統 V7 - 全面管控版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <style>[x-cloak] { display: none !important; }</style>
+</head>
+<body class="bg-slate-50 text-slate-800" x-data="fmeaSystem()" x-init="init()">
+
+    <div class="flex h-screen overflow-hidden">
+        <aside class="w-64 bg-slate-900 text-white flex flex-col flex-shrink-0">
+            <div class="p-8 border-b border-slate-800 text-center">
+                <h2 class="text-2xl font-black text-indigo-400 tracking-tighter italic">FMEA PRO</h2>
+                <p class="text-[9px] text-slate-500 font-bold mt-1 uppercase tracking-widest">Global Risk Control</p>
+            </div>
+            <nav class="flex-1 px-4 py-6 space-y-2 text-sm font-bold">
+                <button @click="view = 'overview'; $nextTick(() => updateCharts())" :class="view === 'overview' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'" class="w-full flex items-center p-3 rounded-xl transition">📊 數據分析首頁</button>
+                <div class="pt-6 pb-2 px-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">數據維護</div>
+                <button @click="view = 'dfmea'; selectedPN = ''" :class="view === 'dfmea' ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:bg-slate-800'" class="w-full flex items-center p-3 rounded-xl transition">📐 DFMEA 設計端</button>
+                <button @click="view = 'pfmea'; selectedPN = ''" :class="view === 'pfmea' ? 'bg-emerald-500 text-white' : 'text-slate-400 hover:bg-slate-800'" class="w-full flex items-center p-3 rounded-xl transition">🏭 PFMEA 製程端</button>
+            </nav>
+        </aside>
+
+        <main class="flex-1 overflow-y-auto p-10 relative">
+            
+            <div x-show="view === 'overview'" x-transition>
+                <header class="mb-10 flex justify-between items-end">
+                    <div>
+                        <h1 class="text-3xl font-black italic tracking-tight">全廠風險管控看板</h1>
+                        <p class="text-slate-500 mt-2 text-sm">即時監控管控料號與失效風險分佈</p>
+                    </div>
+                </header>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+                    <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-center">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Controlled PNs</span>
+                            <span class="p-2 bg-slate-100 rounded-lg text-lg">📦</span>
+                        </div>
+                        <p class="text-3xl font-black text-slate-900" x-text="Object.keys(db).length"></p>
+                        <p class="text-[11px] text-slate-400 mt-1">目前系統已建檔料號</p>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-3xl border-2 border-red-100 shadow-sm flex flex-col justify-center relative overflow-hidden">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-[10px] font-black text-red-400 uppercase tracking-widest">Critical Risks</span>
+                            <span class="p-2 bg-red-50 rounded-lg text-lg">⚠️</span>
+                        </div>
+                        <p class="text-3xl font-black text-red-600" x-text="getHighRiskCount()"></p>
+                        <p class="text-[11px] text-red-400 mt-1">需立即改善項目數</p>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-3xl border-t-4 border-indigo-500 shadow-sm">
+                        <span class="text-[10px] font-black text-indigo-400 uppercase tracking-widest block mb-2">DFMEA Avg. RPN</span>
+                        <p class="text-3xl font-black text-indigo-600" x-text="getAvg('DFMEA')"></p>
+                        <div class="w-full bg-slate-100 h-1 mt-4 rounded-full overflow-hidden">
+                            <div class="bg-indigo-500 h-full" :style="`width: ${Math.min(getAvg('DFMEA')/3, 100)}%`"></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-3xl border-t-4 border-emerald-500 shadow-sm">
+                        <span class="text-[10px] font-black text-emerald-400 uppercase tracking-widest block mb-2">PFMEA Avg. RPN</span>
+                        <p class="text-3xl font-black text-emerald-600" x-text="getAvg('PFMEA')"></p>
+                        <div class="w-full bg-slate-100 h-1 mt-4 rounded-full overflow-hidden">
+                            <div class="bg-emerald-500 h-full" :style="`width: ${Math.min(getAvg('PFMEA')/3, 100)}%`"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
+                    <div class="lg:col-span-2 bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
+                        <h3 class="font-bold text-slate-700 mb-6 flex items-center">
+                            <span class="bg-red-500 w-1.5 h-5 rounded-full mr-2"></span> Top 5 關鍵失效模式
+                        </h3>
+                        <table class="w-full text-sm">
+                            <thead class="text-[10px] text-slate-400 font-black uppercase border-b">
+                                <tr><th class="pb-3 text-left">來源</th><th class="pb-3 text-left">料號</th><th class="pb-3 text-left">失效模式</th><th class="pb-3 text-center">RPN</th></tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="item in getTop5Combined()" :key="item.id">
+                                    <tr class="border-b last:border-0 hover:bg-slate-50 transition">
+                                        <td class="py-4"><span :class="item.type === 'DFMEA' ? 'text-indigo-600 bg-indigo-50' : 'text-emerald-600 bg-emerald-50'" class="px-2 py-1 rounded text-[10px] font-black" x-text="item.type"></span></td>
+                                        <td class="py-4 font-bold" x-text="item.pn"></td>
+                                        <td class="py-4 text-slate-600" x-text="item.FailureMode"></td>
+                                        <td class="py-4 text-center font-black text-red-600" x-text="item.RPN"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
+                        <h3 class="font-bold text-slate-700 mb-4 text-sm">風險分佈座標</h3>
+                        <div class="h-64"><canvas id="soScatterChart"></canvas></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <template x-for="corr in getCorrelationData()" :key="corr.pn">
+                        <div class="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-xl">
+                            <div class="flex justify-between items-center mb-4">
+                                <span class="text-white font-black" x-text="corr.pn"></span>
+                                <span :class="corr.level === '高關聯' ? 'text-red-400 border-red-400' : 'text-slate-500 border-slate-700'" class="text-[9px] px-2 py-0.5 border rounded-full font-bold" x-text="corr.level"></span>
+                            </div>
+                            <div class="space-y-4">
+                                <div class="flex justify-between text-[10px]">
+                                    <span class="text-slate-400">DFMEA Risk</span>
+                                    <span class="text-indigo-400 font-bold" x-text="corr.dMax"></span>
+                                </div>
+                                <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                                    <div class="bg-indigo-500 h-full" :style="`width: ${corr.dMax/5}%`"></div>
+                                </div>
+                                <div class="flex justify-between text-[10px]">
+                                    <span class="text-slate-400">PFMEA Risk</span>
+                                    <span class="text-emerald-400 font-bold" x-text="corr.pMax"></span>
+                                </div>
+                                <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                                    <div class="bg-emerald-500 h-full" :style="`width: ${corr.pMax/5}%`"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <div x-show="view === 'dfmea' || view === 'pfmea'" x-transition>
+                <header class="mb-8 flex justify-between items-start">
+                    <div>
+                        <h1 class="text-3xl font-black italic" x-text="view.toUpperCase() + ' 管理中心'"></h1>
+                        <p class="text-slate-500 mt-2">請完成料號選取後，下載對應範例並匯入。</p>
+                    </div>
+                    <button @click="downloadTemplate(view.toUpperCase())" class="bg-indigo-600 text-white px-6 py-3 rounded-2xl text-sm font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition">
+                        📥 下載範例檔
+                    </button>
+                </header>
+
+                <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 mb-8">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-400 uppercase mb-2">1. 選取料號</label>
+                            <select x-model="selectedPN" class="w-full border p-3 rounded-xl bg-slate-50 outline-none">
+                                <option value="">-- 選取 PN --</option>
+                                <template x-for="pn in partNumbers"><option :value="pn" x-text="pn"></option></template>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-400 uppercase mb-2">2. 匯入檔案</label>
+                            <input type="file" @change="handleFileUpload($event, view.toUpperCase())" :disabled="!selectedPN" class="w-full text-sm">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-3xl border shadow-sm overflow-hidden">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-slate-50 text-[10px] font-black text-slate-400 border-b uppercase">
+                            <tr><th class="p-4">版本</th><th class="p-4">檔名</th><th class="p-4 text-center">判定</th><th class="p-4 text-right">操作</th></tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="(ver, index) in (db[selectedPN] ? db[selectedPN][view.toUpperCase()] : []).slice().reverse()" :key="index">
+                                <tr class="border-b last:border-0">
+                                    <td class="p-4 font-bold" x-text="'V' + (db[selectedPN][view.toUpperCase()].length - index)"></td>
+                                    <td class="p-4 text-slate-500" x-text="ver.fileName"></td>
+                                    <td class="p-4 text-center">
+                                        <span :class="getMaxRPN(ver.data) >= 150 ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-500'" class="px-3 py-1 rounded-full text-[10px] font-black" x-text="getMaxRPN(ver.data) >= 150 ? 'HIGH' : 'LOW'"></span>
+                                    </td>
+                                    <td class="p-4 text-right"><button @click="openDialog(ver)" class="text-indigo-600 font-bold hover:underline">檢視</button></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div x-show="showDialog" class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm" x-cloak x-transition>
+                <div class="bg-white w-full max-w-4xl max-h-[80vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+                    <header class="p-6 border-b flex justify-between bg-slate-50">
+                        <h2 class="font-bold text-slate-800" x-text="dialogData.fileName"></h2>
+                        <button @click="showDialog = false" class="text-2xl text-slate-400 hover:text-black">✕</button>
+                    </header>
+                    <div class="p-8 overflow-y-auto">
+                        <table class="w-full text-sm">
+                            <thead class="text-slate-400 text-[10px] font-black uppercase border-b">
+                                <tr><th class="pb-2 text-left">失效模式</th><th class="pb-2 text-center">S</th><th class="pb-2 text-center">O</th><th class="pb-2 text-center">D</th><th class="pb-2 text-center">RPN</th></tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <template x-for="row in dialogData.data">
+                                    <tr :class="row.S * row.O * row.D >= 150 || row.S >= 9 ? 'bg-red-50' : ''">
+                                        <td class="py-3 font-medium text-slate-700" x-text="row.FailureMode"></td>
+                                        <td class="py-3 text-center" x-text="row.S"></td>
+                                        <td class="py-3 text-center" x-text="row.O"></td>
+                                        <td class="py-3 text-center" x-text="row.D"></td>
+                                        <td class="py-3 text-center font-black" x-text="row.S*row.O*row.D"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+        function fmeaSystem() {
+            return {
+                view: 'overview',
+                selectedPN: '',
+                partNumbers: ['MDL-2026-X1', 'PN-99-ALPHA', 'SMRT-CHIP-V2'],
+                db: {},
+                charts: {},
+                showDialog: false,
+                dialogData: { data: [] },
+
+                init() {
+                    // 初始化一些模擬數據以便 demo
+                    this.db = {
+                        'MDL-2026-X1': {
+                            DFMEA: [{ fileName: 'D_Initial.xlsx', data: [{FailureMode: '耐壓不足', S: 9, O: 2, D: 4}] }],
+                            PFMEA: [{ fileName: 'P_Live.xlsx', data: [{FailureMode: '組裝刮傷', S: 4, O: 8, D: 2}] }]
+                        }
+                    };
+                },
+
+                getHighRiskCount() {
+                    let count = 0;
+                    Object.values(this.db).forEach(pn => {
+                        ['DFMEA', 'PFMEA'].forEach(type => {
+                            const latest = pn[type]?.[pn[type].length - 1]?.data || [];
+                            latest.forEach(r => { if(r.S * r.O * r.D >= 150 || r.S >= 9) count++; });
+                        });
+                    });
+                    return count;
+                },
+
+                getAvg(type) {
+                    let total = 0, count = 0;
+                    Object.values(this.db).forEach(pn => {
+                        const d = pn[type]?.[pn[type].length-1]?.data || [];
+                        d.forEach(r => { total += (r.S*r.O*r.D); count++ });
+                    });
+                    return count ? (total / count).toFixed(1) : "0.0";
+                },
+
+                getTop5Combined() {
+                    let combined = [];
+                    Object.keys(this.db).forEach(pn => {
+                        ['DFMEA', 'PFMEA'].forEach(type => {
+                            const latest = this.db[pn][type]?.[this.db[pn][type].length-1]?.data || [];
+                            latest.forEach((row, i) => {
+                                combined.push({ id: `${pn}-${type}-${i}`, type, pn, FailureMode: row.FailureMode, RPN: row.S*row.O*row.D });
+                            });
+                        });
+                    });
+                    return combined.sort((a,b) => b.RPN - a.RPN).slice(0, 5);
+                },
+
+                getCorrelationData() {
+                    return Object.keys(this.db).map(pn => {
+                        const dMax = this.getMaxRPN(this.db[pn].DFMEA?.[this.db[pn].DFMEA.length-1]?.data || []);
+                        const pMax = this.getMaxRPN(this.db[pn].PFMEA?.[this.db[pn].PFMEA.length-1]?.data || []);
+                        return { pn, dMax, pMax, level: (dMax > 150 && pMax > 100) ? '高關聯' : '一般' };
+                    });
+                },
+
+                getMaxRPN(data) { return data.length ? Math.max(...data.map(d => d.S * d.O * d.D)) : 0; },
+
+                downloadTemplate(type) {
+                    let wsData = [["FailureMode", "S", "O", "D"]];
+                    if(type === 'DFMEA') {
+                        wsData.push(["結構設計應力過載", 9, 1, 4], ["材質選用不當", 8, 2, 5]);
+                    } else {
+                        wsData.push(["點焊機參數設定偏移", 7, 5, 2], ["作業員漏裝墊片", 8, 6, 3]);
+                    }
+                    const ws = XLSX.utils.aoa_to_sheet(wsData);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, "Template");
+                    XLSX.writeFile(wb, `FMEA_${type}_Template.xlsx`);
+                },
+
+                handleFileUpload(e, type) {
+                    const file = e.target.files[0];
+                    if(!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (evt) => {
+                        const workbook = XLSX.read(new Uint8Array(evt.target.result), { type: 'array' });
+                        const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                        const cleaned = json.map((r, i) => ({ id: i, FailureMode: r['FailureMode']||'N/A', S: parseInt(r['S']||0), O: parseInt(r['O']||0), D: parseInt(r['D']||0) }));
+                        if(!this.db[this.selectedPN]) this.db[this.selectedPN] = { DFMEA: [], PFMEA: [] };
+                        this.db[this.selectedPN][type].push({ fileName: file.name, data: cleaned });
+                        alert('匯入成功'); e.target.value = '';
+                    };
+                    reader.readAsArrayBuffer(file);
+                },
+
+                openDialog(v) { this.dialogData = v; this.showDialog = true; },
+
+                updateCharts() {
+                    const ctx = document.getElementById('soScatterChart');
+                    if(!ctx) return;
+                    let datasets = [
+                        { label: 'DFMEA', data: [], backgroundColor: '#6366f1' },
+                        { label: 'PFMEA', data: [], backgroundColor: '#10b981' }
+                    ];
+                    Object.keys(this.db).forEach(pn => {
+                        datasets[0].data.push(...(this.db[pn].DFMEA?.[this.db[pn].DFMEA.length-1]?.data.map(r => ({x: r.S, y: r.O, r: 8})) || []));
+                        datasets[1].data.push(...(this.db[pn].PFMEA?.[this.db[pn].PFMEA.length-1]?.data.map(r => ({x: r.S, y: r.O, r: 8})) || []));
+                    });
+                    if(this.charts.sc) this.charts.sc.destroy();
+                    this.charts.sc = new Chart(ctx, {
+                        type: 'bubble',
+                        data: { datasets },
+                        options: { scales: { x: {min:0, max:10}, y: {min:0, max:10} }, responsive:true, maintainAspectRatio:false }
+                    });
+                }
+            }
+        }
+    </script>
+</body>
+</html>
